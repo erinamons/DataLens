@@ -213,6 +213,8 @@ def run_checks():
     _, decision_data, _ = get_json("/api/decision-center")
     check("决策中心API正常", "suggestions" in decision_data and "directions" in decision_data and "review" in decision_data)
     check("决策中心包含素材状态", "status_counts" in decision_data.get("review", {}))
+    if decision_data.get("directions"):
+        check("决策中心包含推荐原因", "decision_reason" in decision_data["directions"][0])
 
     # 4. 不存在的视频
     _, d, _ = get_json("/api/videos/99999")

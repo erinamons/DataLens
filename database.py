@@ -938,6 +938,7 @@ def get_action_suggestions():
 def get_decision_center():
     directions = get_direction_recommendations(30)
     for d in directions:
+        reasons = []
         if d.get("status") == "已通过" and d.get("score", 0) >= 55:
             d["decision"] = "优先做"
         elif d.get("status") == "未过审":
@@ -948,6 +949,25 @@ def get_decision_center():
             d["decision"] = "观察"
         else:
             d["decision"] = "降优先"
+        if d.get("status") == "已通过":
+            reasons.append("已通过审核")
+        if d.get("status") == "未过审":
+            reasons.append("存在未过审记录")
+        if d.get("effect_level") in ("优秀", "爆款"):
+            reasons.append(f"效果标记为{d.get('effect_level')}")
+        if (d.get("avg_play") or 0) >= 5000:
+            reasons.append(f"均播{int(d.get('avg_play') or 0)}")
+        if (d.get("avg_interaction_rate") or 0) >= 3:
+            reasons.append(f"互动率{d.get('avg_interaction_rate')}%")
+        if (d.get("avg_completion_rate") or 0) >= 30:
+            reasons.append(f"完播率{d.get('avg_completion_rate')}%")
+        if d.get("lift_video_count", 0):
+            reasons.append(f"{d.get('lift_video_count')}条高播放")
+        if d.get("violation_count", 0):
+            reasons.append(f"{d.get('violation_count')}条违规需注意")
+        if not reasons:
+            reasons.append("样本不足，建议继续测试")
+        d["decision_reason"] = "；".join(reasons[:4])
     directions.sort(key=lambda x: x.get("score", 0), reverse=True)
     review = get_review_center()
     return {

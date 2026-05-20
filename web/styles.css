@@ -58,6 +58,10 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 .direction-metric strong, .direction-score strong { display: block; font-size: 15px; color: #172033; font-variant-numeric: tabular-nums; }
 .direction-metric span, .direction-score span { display: block; font-size: 11px; color: #98a2b3; margin-top: 3px; }
 .direction-score strong { color: #e94560; }
+.direction-reason { grid-column: 2 / -1; font-size: 12px; color: #667085; line-height: 1.5; padding-top: 2px; }
+.decision-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.decision-filter button { border: 1px solid #e5e7eb; background: #fff; color: #667085; border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.decision-filter button.active, .decision-filter button:hover { border-color: #e94560; color: #e94560; background: #fff7f9; }
 .review-video-list, .decision-batch-list, .reusable-video-list { display: flex; flex-direction: column; gap: 10px; }
 .review-video-card, .decision-batch-card, .reusable-video-item { border: 1px solid #edf0f3; border-radius: 12px; padding: 13px; background: #fff; }
 .review-video-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
@@ -68,6 +72,10 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 .review-video-note, .decision-batch-note, .reusable-video-item p { font-size: 12px; color: #475467; line-height: 1.6; margin: 0; }
 .decision-batch-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .decision-batch-title span { font-size: 11px; color: #e94560; background: #fff7f9; border-radius: 999px; padding: 2px 8px; font-weight: 700; flex: 0 0 auto; }
+.review-modal-box { width: min(760px, calc(100vw - 32px)); }
+.review-modal-title { font-size: 15px; font-weight: 800; color: #172033; margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-modal-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.review-modal-stats span { font-size: 12px; color: #667085; background: #f6f7fb; border-radius: 999px; padding: 4px 9px; }
 @media (max-width: 1100px) { .decision-layout { grid-template-columns: 1fr; } .direction-decision-row { grid-template-columns: 34px minmax(0, 1fr) 78px 78px 78px 78px; } }
 @media (max-width: 720px) { .material-status-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } .direction-decision-row { grid-template-columns: 28px 1fr; } .direction-metric, .direction-score { text-align: left; } }
 

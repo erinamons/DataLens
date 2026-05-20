@@ -126,3 +126,4 @@ __pycache__/
 - 开发临时文件不要留在正式仓库，例如独立样式测试页和过期方案文档。
 - 视频复盘字段在 `videos` 表中：`material_status`、`review_summary`、`reusable_point`、`failure_reason`、`next_action`。
 - 测试批次增强字段在 `test_batches` 表中：`direction_id`、`goal`、`status`、`conclusion`、`next_action`。
+- 决策中心方向项应返回 `decision` 和 `decision_reason`，前端用它解释为什么推荐继续做、观察、降优先或先停。

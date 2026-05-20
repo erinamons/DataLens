@@ -468,7 +468,12 @@
             <section class="decision-panel">
                 <div class="decision-head">
                     <h3>待复盘视频</h3>
-                    <span>优先处理高评论、高播放、违规和待复盘素材</span>
+                    <div class="decision-filter">
+                        <button class="active" data-review-filter="all" onclick="setReviewFilter('all')">全部</button>
+                        <button data-review-filter="pending" onclick="setReviewFilter('pending')">待复盘</button>
+                        <button data-review-filter="hot" onclick="setReviewFilter('hot')">高表现</button>
+                        <button data-review-filter="violation" onclick="setReviewFilter('violation')">违规</button>
+                    </div>
                 </div>
                 <div id="reviewVideoList" class="review-video-list"></div>
             </section>
@@ -1033,6 +1038,60 @@
 
 <div class="toast" id="toast"></div>
 <div class="undo-toast" id="undoToast"><span id="undoToastMsg"></span><button class="undo-btn" id="undoBtn">撤销</button></div>
+
+<div class="modal-mask" id="reviewModal">
+    <div class="modal-box review-modal-box">
+        <div class="modal-header">
+            <h3>视频复盘</h3>
+            <button class="btn btn-sm btn-outline" onclick="closeReviewModal()">X</button>
+        </div>
+        <div class="modal-body">
+            <div class="review-modal-title" id="reviewModalTitle">-</div>
+            <div class="review-modal-stats" id="reviewModalStats"></div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>素材状态</label>
+                    <select id="reviewMaterialStatus">
+                        <option value="待发布">待发布</option>
+                        <option value="已发布">已发布</option>
+                        <option value="待复盘">待复盘</option>
+                        <option value="可复用">可复用</option>
+                        <option value="已淘汰">已淘汰</option>
+                        <option value="违规待处理">违规待处理</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>评论主因</label>
+                    <input type="text" id="reviewCommentReason" placeholder="例如：用户都在评论小红花">
+                </div>
+                <div class="form-group full">
+                    <label>复盘结论</label>
+                    <textarea id="reviewSummary" rows="3" placeholder="这条视频为什么有效或无效"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>可复用点</label>
+                    <textarea id="reviewReusablePoint" rows="3" placeholder="下次可以复用的标题、钩子、画面或评论引导"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>失败原因</label>
+                    <textarea id="reviewFailureReason" rows="2" placeholder="没过审、没播放、没评论或违规的原因"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>触发评论的句子 / 画面</label>
+                    <textarea id="reviewCommentTrigger" rows="3" placeholder="例如：看视频的您一定是个有福气的人"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>下次测试动作</label>
+                    <textarea id="reviewNextAction" rows="3" placeholder="下一轮要怎么测"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeReviewModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveReviewModal()">保存复盘</button>
+        </div>
+    </div>
+</div>
 
 <!-- 隐藏的文件上传 input -->
 <input type="file" id="videoFileInput" accept="video/*" style="display:none" onchange="uploadVideo(this)">
@@ -1945,6 +2004,8 @@ function closeMoreNav() {
 }
 
 let decisionCache = null;
+let reviewFilter = 'all';
+let reviewingVideoId = null;
 
 async function loadDecisionCenter() {
     const targets = ['decisionSuggestions', 'materialStatusBoard', 'directionDecisionList', 'reviewVideoList', 'decisionBatchList', 'reusableVideoList'];
@@ -2019,23 +2080,28 @@ function renderDirectionDecisionList(items) {
         <div class="direction-metric"><strong>${d.avg_interaction_rate || 0}%</strong><span>互动</span></div>
         <div class="direction-metric"><strong>${d.avg_completion_rate || 0}%</strong><span>完播</span></div>
         <div class="direction-score"><strong>${d.score || 0}</strong><span>${esc(d.decision || '观察')}</span></div>
+        <div class="direction-reason">${esc(d.decision_reason || '')}</div>
     </div>`).join('');
 }
 
 function renderReviewVideoList(videos) {
     const el = document.getElementById('reviewVideoList');
     if (!el) return;
-    if (!videos.length) {
+    let list = videos || [];
+    if (reviewFilter === 'pending') list = list.filter(v => (v.material_status || '') === '待复盘');
+    if (reviewFilter === 'hot') list = list.filter(v => (v.play_count || 0) >= 10000 || (v.comment_count || 0) >= 50);
+    if (reviewFilter === 'violation') list = list.filter(v => v.violation_type);
+    if (!list.length) {
         el.innerHTML = '<div class="dashboard-empty">暂无待复盘视频</div>';
         return;
     }
-    el.innerHTML = videos.map(v => `<div class="review-video-card">
+    el.innerHTML = list.map(v => `<div class="review-video-card">
         <div class="review-video-top">
             <div>
                 <strong title="${esc(v.title || '')}">${esc(v.title || '未命名视频')}</strong>
                 <span>${esc(v.direction_name || '未分配方向')} · ${esc(v.material_status || '已发布')}</span>
             </div>
-            <button class="btn btn-sm btn-outline" onclick="quickReviewVideo(${v.id})">复盘</button>
+            <button class="btn btn-sm btn-outline" onclick="openReviewModal(${v.id})">复盘</button>
         </div>
         <div class="review-video-stats">
             <span>播放 ${fmtNum(v.play_count || 0)}</span>
@@ -2045,6 +2111,69 @@ function renderReviewVideoList(videos) {
         </div>
         <div class="review-video-note">${esc(v.reusable_point || v.comment_trigger_text || v.review_summary || v.failure_reason || '还没有复盘结论')}</div>
     </div>`).join('');
+}
+
+function setReviewFilter(filter) {
+    reviewFilter = filter;
+    document.querySelectorAll('[data-review-filter]').forEach(btn => btn.classList.toggle('active', btn.dataset.reviewFilter === filter));
+    renderReviewVideoList(decisionCache?.review?.videos || []);
+}
+
+function findDecisionVideo(id) {
+    return (decisionCache?.review?.videos || []).find(item => item.id === id)
+        || (decisionCache?.review?.reusable_videos || []).find(item => item.id === id);
+}
+
+function openReviewModal(id) {
+    const v = findDecisionVideo(id);
+    if (!v) return;
+    reviewingVideoId = id;
+    document.getElementById('reviewModalTitle').textContent = v.title || '未命名视频';
+    document.getElementById('reviewModalStats').innerHTML = `
+        <span>播放 ${fmtNum(v.play_count || 0)}</span>
+        <span>评论 ${fmtNum(v.comment_count || 0)}</span>
+        <span>评论率 ${v.comment_rate || 0}%</span>
+        <span>互动 ${v.interaction_rate || 0}%</span>
+    `;
+    document.getElementById('reviewMaterialStatus').value = v.material_status || '待复盘';
+    document.getElementById('reviewCommentReason').value = v.comment_reason || '';
+    document.getElementById('reviewSummary').value = v.review_summary || '';
+    document.getElementById('reviewReusablePoint').value = v.reusable_point || '';
+    document.getElementById('reviewFailureReason').value = v.failure_reason || '';
+    document.getElementById('reviewCommentTrigger').value = v.comment_trigger_text || '';
+    document.getElementById('reviewNextAction').value = v.next_action || v.comment_reuse_advice || '';
+    document.getElementById('reviewModal').classList.add('show');
+    refreshCustomSelect('reviewMaterialStatus');
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').classList.remove('show');
+    reviewingVideoId = null;
+}
+
+async function saveReviewModal() {
+    if (!reviewingVideoId) return;
+    const body = {
+        material_status: document.getElementById('reviewMaterialStatus').value || '待复盘',
+        comment_reason: document.getElementById('reviewCommentReason').value.trim(),
+        review_summary: document.getElementById('reviewSummary').value.trim(),
+        reusable_point: document.getElementById('reviewReusablePoint').value.trim(),
+        failure_reason: document.getElementById('reviewFailureReason').value.trim(),
+        comment_trigger_text: document.getElementById('reviewCommentTrigger').value.trim(),
+        next_action: document.getElementById('reviewNextAction').value.trim(),
+        comment_reuse_advice: document.getElementById('reviewNextAction').value.trim(),
+    };
+    const res = await fetch(`/api/videos/${reviewingVideoId}/review`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    showToast(data.success ? '复盘已保存' : '复盘保存失败', data.success ? 'success' : 'error');
+    if (data.success) {
+        closeReviewModal();
+        loadDecisionCenter();
+    }
 }
 
 async function quickReviewVideo(id) {
