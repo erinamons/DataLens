@@ -38,6 +38,7 @@ from database import (
     get_hook_versions, add_hook_version, delete_hook_version,
     get_hook_recommendations, get_comment_opportunities,
     get_data_quality, get_data_quality_tasks, get_audit_logs, get_test_batches, add_test_batch, get_hook_review,
+    update_test_batch, delete_test_batch, get_decision_center, update_video_review,
     global_search,
 )
 
@@ -176,6 +177,11 @@ class VideoIn(BaseModel):
     comment_trigger_text: str = ""
     comment_reuse_advice: str = ""
     test_batch_id: Optional[int] = None
+    material_status: str = "已发布"
+    review_summary: str = ""
+    reusable_point: str = ""
+    failure_reason: str = ""
+    next_action: str = ""
 
 
 class VideoUpdate(VideoIn):
@@ -204,7 +210,19 @@ class BatchVideoUpdateOp(BaseModel):
     test_batch_id: Optional[int] = None
     violation_status: Optional[str] = None
     completion_rate: Optional[float] = None
+    material_status: Optional[str] = None
     clear_fields: List[str] = []
+
+
+class VideoReviewIn(BaseModel):
+    material_status: Optional[str] = None
+    review_summary: Optional[str] = None
+    reusable_point: Optional[str] = None
+    failure_reason: Optional[str] = None
+    next_action: Optional[str] = None
+    comment_reason: Optional[str] = None
+    comment_trigger_text: Optional[str] = None
+    comment_reuse_advice: Optional[str] = None
 
 
 class DirectionIn(BaseModel):
@@ -291,6 +309,21 @@ class HookFromVideoIn(BaseModel):
 class BatchIn(BaseModel):
     name: str
     note: str = ""
+    direction_id: Optional[int] = None
+    goal: str = ""
+    status: str = "测试中"
+    conclusion: str = ""
+    next_action: str = ""
+
+
+class BatchUpdateIn(BaseModel):
+    name: Optional[str] = None
+    note: Optional[str] = None
+    direction_id: Optional[int] = None
+    goal: Optional[str] = None
+    status: Optional[str] = None
+    conclusion: Optional[str] = None
+    next_action: Optional[str] = None
 
 
 # --- 视频 API ---
@@ -347,6 +380,11 @@ def api_add_video(data: VideoIn):
         comment_trigger_text=data.comment_trigger_text,
         comment_reuse_advice=data.comment_reuse_advice,
         test_batch_id=data.test_batch_id,
+        material_status=data.material_status,
+        review_summary=data.review_summary,
+        reusable_point=data.reusable_point,
+        failure_reason=data.failure_reason,
+        next_action=data.next_action,
     )
     return {"success": True, "id": video_id}
 
@@ -369,6 +407,11 @@ def api_update_video(video_id: int, data: VideoUpdate):
         comment_trigger_text=data.comment_trigger_text,
         comment_reuse_advice=data.comment_reuse_advice,
         test_batch_id=data.test_batch_id,
+        material_status=data.material_status,
+        review_summary=data.review_summary,
+        reusable_point=data.reusable_point,
+        failure_reason=data.failure_reason,
+        next_action=data.next_action,
     )
     return {"success": True}
 
@@ -378,7 +421,8 @@ def api_patch_video(video_id: int, data: dict):
     """行内编辑：只更新传入的字段"""
     allowed = {'play_count', 'like_count', 'comment_count', 'favorite_count', 'share_count',
                'completion_rate', 'duration', 'publish_time', 'violation_type', 'violation_note', 'violation_status',
-               'account_id'}
+               'account_id', 'material_status', 'review_summary', 'reusable_point', 'failure_reason', 'next_action',
+               'comment_reason', 'comment_trigger_text', 'comment_reuse_advice'}
     fields = {k: v for k, v in data.items() if k in allowed}
     if not fields:
         return {"success": False, "error": "无有效字段"}
@@ -436,6 +480,12 @@ def api_batch_update_videos(data: BatchVideoUpdateOp):
             fields[field] = None
     updated = batch_update_videos(data.video_ids, **fields)
     return {"success": True, "updated": updated}
+
+
+@app.post("/api/videos/{video_id}/review")
+def api_update_video_review(video_id: int, data: VideoReviewIn):
+    ok = update_video_review(video_id, **_model_updates(data))
+    return {"success": ok}
 
 
 # --- 文件上传 ---
@@ -823,10 +873,30 @@ def api_test_batches():
 
 @app.post("/api/test-batches")
 def api_add_test_batch(data: BatchIn):
-    batch_id = add_test_batch(data.name, data.note)
+    batch_id = add_test_batch(
+        data.name, data.note, data.direction_id, data.goal,
+        data.status, data.conclusion, data.next_action,
+    )
     if batch_id is None:
         return {"success": False, "error": "测试批次已存在"}
     return {"success": True, "id": batch_id}
+
+
+@app.put("/api/test-batches/{batch_id}")
+def api_update_test_batch(batch_id: int, data: BatchUpdateIn):
+    ok = update_test_batch(batch_id, **_model_updates(data))
+    return {"success": ok}
+
+
+@app.delete("/api/test-batches/{batch_id}")
+def api_delete_test_batch(batch_id: int):
+    ok = delete_test_batch(batch_id)
+    return {"success": ok}
+
+
+@app.get("/api/decision-center")
+def api_decision_center():
+    return get_decision_center()
 
 
 @app.get("/api/backup/db")

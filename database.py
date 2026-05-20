@@ -163,6 +163,11 @@ def init_db():
                     "comment_reason TEXT DEFAULT ''",
                     "comment_trigger_text TEXT DEFAULT ''",
                     "comment_reuse_advice TEXT DEFAULT ''",
+                    "material_status TEXT DEFAULT '已发布'",
+                    "review_summary TEXT DEFAULT ''",
+                    "reusable_point TEXT DEFAULT ''",
+                    "failure_reason TEXT DEFAULT ''",
+                    "next_action TEXT DEFAULT ''",
                     "deleted_at TEXT"):
             try:
                 conn.execute(f"ALTER TABLE videos ADD COLUMN {col}")
@@ -196,6 +201,18 @@ def init_db():
             except Exception:
                 pass
 
+        for col in (
+            "direction_id INTEGER REFERENCES directions(id) ON DELETE SET NULL",
+            "goal TEXT DEFAULT ''",
+            "status TEXT DEFAULT '测试中'",
+            "conclusion TEXT DEFAULT ''",
+            "next_action TEXT DEFAULT ''",
+        ):
+            try:
+                conn.execute(f"ALTER TABLE test_batches ADD COLUMN {col}")
+            except Exception:
+                pass
+
         try:
             conn.execute("UPDATE directions SET is_lift=1, effect_level='优秀', status='已通过' WHERE status='起量'")
             conn.execute("UPDATE directions SET effect_level='优秀' WHERE is_lift=1 AND (effect_level IS NULL OR effect_level='' OR effect_level='待观察')")
@@ -226,6 +243,8 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_videos_account_id ON videos(account_id);
             CREATE INDEX IF NOT EXISTS idx_videos_interaction_hook_id ON videos(interaction_hook_id);
             CREATE INDEX IF NOT EXISTS idx_videos_test_batch_id ON videos(test_batch_id);
+            CREATE INDEX IF NOT EXISTS idx_videos_material_status ON videos(material_status);
+            CREATE INDEX IF NOT EXISTS idx_test_batches_direction_id ON test_batches(direction_id);
         """)
 
     init_plans_table()
@@ -239,7 +258,8 @@ def add_video(title, play_count, like_count, comment_count, share_count,
               violation_type='', violation_note='', violation_status='pending',
               account_id=None, favorite_count=0, interaction_hook_id=None,
               comment_reason='', comment_trigger_text='', comment_reuse_advice='',
-              test_batch_id=None):
+              test_batch_id=None, material_status='已发布', review_summary='',
+              reusable_point='', failure_reason='', next_action=''):
     with get_db() as conn:
         cur = conn.execute(
             """INSERT INTO videos
@@ -247,13 +267,15 @@ def add_video(title, play_count, like_count, comment_count, share_count,
                 favorite_count, publish_date, direction_id, group_id, account_id,
                 completion_rate, duration, publish_time,
                 violation_type, violation_note, violation_status,
-                interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
+                material_status, review_summary, reusable_point, failure_reason, next_action)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, play_count, like_count, comment_count, share_count,
              favorite_count, publish_date, direction_id, group_id, account_id,
              completion_rate, duration, publish_time,
              violation_type, violation_note, violation_status,
-             interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice),
+             interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
+             material_status, review_summary, reusable_point, failure_reason, next_action),
         )
         video_id = cur.lastrowid
         log_audit("video", video_id, "create", f"新增视频：{title}", conn)
@@ -272,7 +294,8 @@ def update_video(video_id, title, play_count, like_count, comment_count,
                  violation_type=None, violation_note=None, violation_status=None,
                  account_id=None, favorite_count=None, interaction_hook_id=None,
                  comment_reason=None, comment_trigger_text=None, comment_reuse_advice=None,
-                 test_batch_id=None):
+                 test_batch_id=None, material_status=None, review_summary=None,
+                 reusable_point=None, failure_reason=None, next_action=None):
     with get_db() as conn:
         conn.execute(
             """UPDATE videos SET
@@ -291,7 +314,12 @@ def update_video(video_id, title, play_count, like_count, comment_count,
                test_batch_id=?,
                comment_reason=COALESCE(?, comment_reason),
                comment_trigger_text=COALESCE(?, comment_trigger_text),
-               comment_reuse_advice=COALESCE(?, comment_reuse_advice)
+               comment_reuse_advice=COALESCE(?, comment_reuse_advice),
+               material_status=COALESCE(?, material_status),
+               review_summary=COALESCE(?, review_summary),
+               reusable_point=COALESCE(?, reusable_point),
+               failure_reason=COALESCE(?, failure_reason),
+               next_action=COALESCE(?, next_action)
                WHERE id=?""",
             (title, play_count, like_count, comment_count,
              share_count, favorite_count, publish_date, video_path, cover_path,
@@ -299,6 +327,7 @@ def update_video(video_id, title, play_count, like_count, comment_count,
              completion_rate, duration, publish_time,
              violation_type, violation_note, violation_status,
              interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
+             material_status, review_summary, reusable_point, failure_reason, next_action,
              video_id),
         )
         conn.execute("DELETE FROM video_tags WHERE video_id=?", (video_id,))
@@ -323,7 +352,7 @@ def patch_video(video_id, **fields):
 def batch_update_videos(video_ids, **fields):
     allowed = {
         "direction_id", "group_id", "account_id", "interaction_hook_id",
-        "test_batch_id", "violation_status", "completion_rate"
+        "test_batch_id", "violation_status", "completion_rate", "material_status"
     }
     clean = {k: v for k, v in fields.items() if k in allowed}
     if not video_ids or not clean:
@@ -692,12 +721,18 @@ def get_test_batches():
     with get_db() as conn:
         rows = conn.execute("""
             SELECT b.*,
+                   d.name as direction_name,
+                   d.color as direction_color,
                    COUNT(v.id) as video_count,
                    COALESCE(ROUND(AVG(v.play_count), 0), 0) as avg_play,
                    COALESCE(ROUND(AVG(v.comment_count), 1), 0) as avg_comments,
                    COALESCE(ROUND(AVG(CASE WHEN v.play_count > 0
-                       THEN v.comment_count * 100.0 / v.play_count ELSE 0 END), 2), 0) as avg_comment_rate
+                       THEN v.comment_count * 100.0 / v.play_count ELSE 0 END), 2), 0) as avg_comment_rate,
+                   COALESCE(MAX(v.play_count), 0) as max_play,
+                   COUNT(CASE WHEN v.material_status='可复用' THEN 1 END) as reusable_count,
+                   COUNT(CASE WHEN v.material_status='待复盘' THEN 1 END) as review_count
             FROM test_batches b
+            LEFT JOIN directions d ON b.direction_id=d.id
             LEFT JOIN videos v ON v.test_batch_id=b.id AND v.deleted_at IS NULL
             GROUP BY b.id
             ORDER BY b.id DESC
@@ -705,14 +740,222 @@ def get_test_batches():
         return [dict(r) for r in rows]
 
 
-def add_test_batch(name, note=''):
+def add_test_batch(name, note='', direction_id=None, goal='', status='测试中',
+                   conclusion='', next_action=''):
     with get_db() as conn:
         try:
-            cur = conn.execute("INSERT INTO test_batches (name, note) VALUES (?, ?)", (name, note))
+            cur = conn.execute(
+                """INSERT INTO test_batches
+                   (name, note, direction_id, goal, status, conclusion, next_action)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (name, note, direction_id, goal, status, conclusion, next_action),
+            )
             log_audit("batch", cur.lastrowid, "create", f"新增测试批次：{name}", conn)
             return cur.lastrowid
         except sqlite3.IntegrityError:
             return None
+
+
+def update_test_batch(batch_id, name=None, note=None, direction_id=_UNSET,
+                      goal=None, status=None, conclusion=None, next_action=None):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM test_batches WHERE id=?", (batch_id,)).fetchone()
+        if not row:
+            return False
+        d = dict(row)
+        conn.execute(
+            """UPDATE test_batches SET name=?, note=?, direction_id=?, goal=?,
+               status=?, conclusion=?, next_action=? WHERE id=?""",
+            (name if name is not None else d["name"],
+             note if note is not None else d.get("note", ""),
+             direction_id if direction_id is not _UNSET else d.get("direction_id"),
+             goal if goal is not None else d.get("goal", ""),
+             status if status is not None else d.get("status", "测试中"),
+             conclusion if conclusion is not None else d.get("conclusion", ""),
+             next_action if next_action is not None else d.get("next_action", ""),
+             batch_id),
+        )
+        log_audit("batch", batch_id, "update", f"更新测试批次：{name or d['name']}", conn)
+        return True
+
+
+def delete_test_batch(batch_id):
+    with get_db() as conn:
+        conn.execute("UPDATE videos SET test_batch_id=NULL WHERE test_batch_id=?", (batch_id,))
+        cur = conn.execute("DELETE FROM test_batches WHERE id=?", (batch_id,))
+        log_audit("batch", batch_id, "delete", f"删除测试批次：{batch_id}", conn)
+        return cur.rowcount > 0
+
+
+def update_video_review(video_id, material_status=None, review_summary=None,
+                        reusable_point=None, failure_reason=None, next_action=None,
+                        comment_reason=None, comment_trigger_text=None,
+                        comment_reuse_advice=None):
+    fields = {}
+    for key, value in {
+        "material_status": material_status,
+        "review_summary": review_summary,
+        "reusable_point": reusable_point,
+        "failure_reason": failure_reason,
+        "next_action": next_action,
+        "comment_reason": comment_reason,
+        "comment_trigger_text": comment_trigger_text,
+        "comment_reuse_advice": comment_reuse_advice,
+    }.items():
+        if value is not None:
+            fields[key] = value
+    if not fields:
+        return False
+    patch_video(video_id, **fields)
+    log_audit("video", video_id, "review", "更新视频复盘")
+    return True
+
+
+def get_review_center(limit=12):
+    rate_expr = ("CASE WHEN v.play_count > 0 "
+                 "THEN ROUND((v.like_count + v.comment_count + v.share_count + COALESCE(v.favorite_count, 0)) * 100.0 / v.play_count, 2) "
+                 "ELSE 0 END")
+    comment_rate_expr = ("CASE WHEN v.play_count > 0 "
+                         "THEN ROUND(v.comment_count * 100.0 / v.play_count, 2) "
+                         "ELSE 0 END")
+    with get_db() as conn:
+        rows = conn.execute(f"""
+            SELECT v.*, d.name as direction_name, d.color as direction_color,
+                   h.name as hook_name, b.name as batch_name,
+                   {rate_expr} as interaction_rate,
+                   {comment_rate_expr} as comment_rate
+            FROM videos v
+            LEFT JOIN directions d ON v.direction_id=d.id
+            LEFT JOIN interaction_hooks h ON v.interaction_hook_id=h.id
+            LEFT JOIN test_batches b ON v.test_batch_id=b.id
+            WHERE v.deleted_at IS NULL
+            ORDER BY
+                CASE
+                    WHEN v.material_status='待复盘' THEN 0
+                    WHEN v.comment_count >= 50 THEN 1
+                    WHEN v.play_count >= 10000 THEN 2
+                    WHEN v.violation_type IS NOT NULL AND v.violation_type != '' THEN 3
+                    ELSE 4
+                END,
+                v.play_count DESC,
+                v.id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+        status_rows = conn.execute("""
+            SELECT COALESCE(NULLIF(material_status, ''), '已发布') as status, COUNT(*) as count
+            FROM videos
+            WHERE deleted_at IS NULL
+            GROUP BY COALESCE(NULLIF(material_status, ''), '已发布')
+            ORDER BY count DESC
+        """).fetchall()
+
+        reusable_rows = conn.execute(f"""
+            SELECT v.*, d.name as direction_name, {rate_expr} as interaction_rate,
+                   {comment_rate_expr} as comment_rate
+            FROM videos v
+            LEFT JOIN directions d ON v.direction_id=d.id
+            WHERE v.deleted_at IS NULL
+              AND (v.material_status='可复用' OR v.reusable_point != '' OR v.comment_trigger_text != '')
+            ORDER BY v.play_count DESC, v.comment_count DESC
+            LIMIT 8
+        """).fetchall()
+
+        return {
+            "videos": [dict(r) for r in rows],
+            "status_counts": [dict(r) for r in status_rows],
+            "reusable_videos": [dict(r) for r in reusable_rows],
+        }
+
+
+def get_action_suggestions():
+    suggestions = []
+    with get_db() as conn:
+        pending_review = conn.execute("""
+            SELECT COUNT(*) FROM videos
+            WHERE deleted_at IS NULL
+              AND (material_status='待复盘'
+                   OR play_count >= 10000
+                   OR comment_count >= 50)
+        """).fetchone()[0]
+        if pending_review:
+            suggestions.append({
+                "level": "high",
+                "title": "优先复盘高价值视频",
+                "desc": f"有 {pending_review} 条视频播放或评论表现突出，建议提炼可复用点。",
+                "action": "查看复盘中心",
+            })
+
+        missing_direction = conn.execute("""
+            SELECT COUNT(*) FROM videos
+            WHERE deleted_at IS NULL AND direction_id IS NULL
+        """).fetchone()[0]
+        if missing_direction:
+            suggestions.append({
+                "level": "medium",
+                "title": "补齐方向标签",
+                "desc": f"还有 {missing_direction} 条视频没有绑定方向，会影响方向决策榜。",
+                "action": "去视频库筛选",
+            })
+
+        reusable = conn.execute("""
+            SELECT COUNT(*) FROM videos
+            WHERE deleted_at IS NULL
+              AND (material_status='可复用' OR reusable_point != '' OR comment_trigger_text != '')
+        """).fetchone()[0]
+        if reusable:
+            suggestions.append({
+                "level": "good",
+                "title": "复用已验证素材",
+                "desc": f"已沉淀 {reusable} 条可复用经验，可以优先安排同方向测试。",
+                "action": "查看可复用",
+            })
+
+        violation_pending = conn.execute("""
+            SELECT COUNT(*) FROM videos
+            WHERE deleted_at IS NULL
+              AND violation_type IS NOT NULL AND violation_type != ''
+              AND (violation_status IS NULL OR violation_status='' OR violation_status='pending')
+        """).fetchone()[0]
+        if violation_pending:
+            suggestions.append({
+                "level": "danger",
+                "title": "处理未完成违规",
+                "desc": f"有 {violation_pending} 条违规记录待处理，建议先沉淀失败原因。",
+                "action": "去违规中心",
+            })
+
+    if not suggestions:
+        suggestions.append({
+            "level": "good",
+            "title": "当前数据状态稳定",
+            "desc": "可以继续录入新视频，并按批次测试新的方向和钩子。",
+            "action": "继续录入",
+        })
+    return suggestions
+
+
+def get_decision_center():
+    directions = get_direction_recommendations(30)
+    for d in directions:
+        if d.get("status") == "已通过" and d.get("score", 0) >= 55:
+            d["decision"] = "优先做"
+        elif d.get("status") == "未过审":
+            d["decision"] = "先停"
+        elif d.get("video_count", 0) < 3:
+            d["decision"] = "继续测"
+        elif d.get("score", 0) >= 35:
+            d["decision"] = "观察"
+        else:
+            d["decision"] = "降优先"
+    directions.sort(key=lambda x: x.get("score", 0), reverse=True)
+    review = get_review_center()
+    return {
+        "suggestions": get_action_suggestions(),
+        "directions": directions,
+        "review": review,
+        "batches": get_test_batches(),
+    }
 
 
 def get_hook_review(hook_id):

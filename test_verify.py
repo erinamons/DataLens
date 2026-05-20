@@ -176,6 +176,43 @@ def run_checks():
     check("GET单个视频-有互动率", "interaction_rate" in d)
     check("GET单个视频-收藏数正确", d.get("favorite_count") == 300)
     check("GET单个视频-互动率含收藏", d.get("interaction_rate") == 11.0)
+    check("GET单个视频-默认素材状态", d.get("material_status") == "已发布")
+
+    _, review_data = post_json(
+        f"/api/videos/{vid}/review",
+        {
+            "material_status": "可复用",
+            "review_summary": "评论集中在祝福触发句",
+            "reusable_point": "祝福式评论引导有效",
+            "next_action": "下一批继续测试小红花话术",
+            "comment_trigger_text": "看视频的您一定是个有福气的人",
+        },
+    )
+    check("视频复盘保存成功", review_data.get("success"))
+    _, d, _ = get_json(f"/api/videos/{vid}")
+    check("视频复盘-素材状态更新", d.get("material_status") == "可复用")
+    check("视频复盘-可复用点更新", d.get("reusable_point") == "祝福式评论引导有效")
+
+    _, batch_data = post_json(
+        "/api/test-batches",
+        {
+            "name": "祝福评论钩子测试",
+            "goal": "提升评论率",
+            "status": "测试中",
+            "conclusion": "待观察",
+            "next_action": "继续补 5 条",
+        },
+    )
+    batch_id = batch_data.get("id")
+    check("创建实验批次-增强字段", batch_data.get("success") and batch_id)
+    _, batch_update = put_json(
+        f"/api/test-batches/{batch_id}",
+        {"status": "有效", "conclusion": "评论率明显提升"},
+    )
+    check("更新实验批次", batch_update.get("success"))
+    _, decision_data, _ = get_json("/api/decision-center")
+    check("决策中心API正常", "suggestions" in decision_data and "directions" in decision_data and "review" in decision_data)
+    check("决策中心包含素材状态", "status_counts" in decision_data.get("review", {}))
 
     # 4. 不存在的视频
     _, d, _ = get_json("/api/videos/99999")

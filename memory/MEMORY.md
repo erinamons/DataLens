@@ -90,6 +90,7 @@ GitHub 推送需要显式走代理：
 - 计划管理：待办、进行、完成状态和每日任务。
 - 账号矩阵：账号、平台、分组、方向、状态和矩阵健康度。
 - 工具：CSV 导入导出、备份恢复、数据质量检查、运营报告导出。
+- 决策中心：行动建议、方向决策榜、待复盘视频、素材状态、实验批次和可复用经验。
 
 ## 不应提交的数据
 
@@ -111,6 +112,7 @@ __pycache__/
 
 - 改接口后同步检查前端调用和 `test_verify.py`。
 - 改数据库字段后同步检查迁移逻辑、统计查询和导出逻辑。
+- 改运营判断逻辑时同步检查 `/api/decision-center`、方向推荐、复盘字段和前端决策页。
 - 上传视频、封面和数据库是用户本地数据，不能随意删除或覆盖。
 - 前端目前集中在 `web/index.html`，功能继续增多后应考虑拆分 JS 模块。
 - `PROJECT_NOTES.md` 面向项目交接说明，`memory/MEMORY.md` 面向长期上下文记忆，`memory/YYYY-MM-DD.md` 记录当天变更。
@@ -122,3 +124,5 @@ __pycache__/
 - 文档在 PowerShell 里显示中文乱码，通常是控制台编码问题，不代表 GitHub 显示异常。
 - 提交前要用 `git status --short --ignored` 检查运行数据是否被忽略。
 - 开发临时文件不要留在正式仓库，例如独立样式测试页和过期方案文档。
+- 视频复盘字段在 `videos` 表中：`material_status`、`review_summary`、`reusable_point`、`failure_reason`、`next_action`。
+- 测试批次增强字段在 `test_batches` 表中：`direction_id`、`goal`、`status`、`conclusion`、`next_action`。

@@ -18,6 +18,7 @@
         <div class="tab" onclick="switchPage('analysis')">分析</div>
         <div class="tab" onclick="switchPage('plans')">计划</div>
         <div class="tab" onclick="switchPage('matrix')">矩阵</div>
+        <div class="tab" onclick="switchPage('decision')">决策</div>
         <div class="tab tab-secondary" onclick="switchPage('hooks')">钩子库</div>
         <div class="tab tab-secondary" onclick="switchPage('violations')">违规</div>
         <div class="tab tab-secondary" onclick="switchPage('accounts')">账号</div>
@@ -219,6 +220,17 @@
                             <label>测试批次</label>
                             <select id="fTestBatch"><option value="">不绑定批次</option></select>
                         </div>
+                        <div class="form-group">
+                            <label>素材状态</label>
+                            <select id="fMaterialStatus">
+                                <option value="待发布">待发布</option>
+                                <option value="已发布" selected>已发布</option>
+                                <option value="待复盘">待复盘</option>
+                                <option value="可复用">可复用</option>
+                                <option value="已淘汰">已淘汰</option>
+                                <option value="违规待处理">违规待处理</option>
+                            </select>
+                        </div>
                         <div class="form-group full">
                             <label>素材方向（可多选）</label>
                             <div class="tag-selector" id="tagSelector"></div>
@@ -418,6 +430,63 @@
             </table>
             <div class="pagination" id="pagination"></div>
         </div>
+    </div>
+
+    <!-- ===== 决策中心 ===== -->
+    <div id="pageDecision" class="page">
+        <div class="dashboard-hero">
+            <div>
+                <h1>运营决策中心</h1>
+                <p>把方向、复盘、素材状态和测试批次汇总到一个页面，直接判断下一步做什么。</p>
+            </div>
+            <button class="btn btn-primary" onclick="loadDecisionCenter()">刷新决策</button>
+        </div>
+        <div class="decision-layout">
+            <section class="decision-panel">
+                <div class="decision-head">
+                    <h3>今日行动建议</h3>
+                    <span>按紧急程度排序</span>
+                </div>
+                <div id="decisionSuggestions" class="decision-suggestions"></div>
+            </section>
+            <section class="decision-panel">
+                <div class="decision-head">
+                    <h3>素材状态</h3>
+                    <span>视频流转概览</span>
+                </div>
+                <div id="materialStatusBoard" class="material-status-board"></div>
+            </section>
+        </div>
+        <section class="decision-panel">
+            <div class="decision-head">
+                <h3>方向决策榜</h3>
+                <span>综合通过状态、效果等级、播放、互动、完播和违规风险</span>
+            </div>
+            <div id="directionDecisionList" class="direction-decision-list"></div>
+        </section>
+        <div class="decision-layout">
+            <section class="decision-panel">
+                <div class="decision-head">
+                    <h3>待复盘视频</h3>
+                    <span>优先处理高评论、高播放、违规和待复盘素材</span>
+                </div>
+                <div id="reviewVideoList" class="review-video-list"></div>
+            </section>
+            <section class="decision-panel">
+                <div class="decision-head">
+                    <h3>实验批次</h3>
+                    <span>按一次测试看结论</span>
+                </div>
+                <div id="decisionBatchList" class="decision-batch-list"></div>
+            </section>
+        </div>
+        <section class="decision-panel">
+            <div class="decision-head">
+                <h3>可复用经验</h3>
+                <span>下次可以直接参考的标题、钩子和评论触发点</span>
+            </div>
+            <div id="reusableVideoList" class="reusable-video-list"></div>
+        </section>
     </div>
 
     <!-- ===== 分析页 ===== -->
@@ -906,6 +975,33 @@
                 <div class="form-group">
                     <label>测试批次</label>
                     <select id="eTestBatch"><option value="">不绑定批次</option></select>
+                </div>
+                <div class="form-group">
+                    <label>素材状态</label>
+                    <select id="eMaterialStatus">
+                        <option value="待发布">待发布</option>
+                        <option value="已发布">已发布</option>
+                        <option value="待复盘">待复盘</option>
+                        <option value="可复用">可复用</option>
+                        <option value="已淘汰">已淘汰</option>
+                        <option value="违规待处理">违规待处理</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label>复盘结论</label>
+                    <textarea id="eReviewSummary" rows="2" placeholder="这条视频为什么有效或无效"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>可复用点</label>
+                    <textarea id="eReusablePoint" rows="2" placeholder="下次可以复用的标题、钩子、画面或评论引导"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>失败原因</label>
+                    <textarea id="eFailureReason" rows="2" placeholder="没通过、没播放、没评论或违规的原因"></textarea>
+                </div>
+                <div class="form-group full">
+                    <label>下次测试动作</label>
+                    <textarea id="eNextAction" rows="2" placeholder="下一轮要怎么测"></textarea>
                 </div>
                 <div class="form-group">
                     <label>评论主要内容</label>
@@ -1804,7 +1900,7 @@ function switchPage(page) {
     document.querySelectorAll('.more-nav-item').forEach(t => t.classList.remove('active'));
     document.querySelector('.more-nav')?.classList.remove('active');
     closeMoreNav();
-    const tabMap = { dashboard: 0, input: 1, analysis: 2, plans: 3, matrix: 4, hooks: 5, violations: 6, accounts: 7 };
+    const tabMap = { dashboard: 0, input: 1, analysis: 2, plans: 3, matrix: 4, decision: 5, hooks: 6, violations: 7, accounts: 8 };
     const idx = tabMap[page] ?? 0;
     const tab = document.querySelectorAll('.tab')[idx];
     if (tab) tab.classList.add('active');
@@ -1813,13 +1909,14 @@ function switchPage(page) {
         moreItem.classList.add('active');
         document.querySelector('.more-nav')?.classList.add('active');
     }
-    const pageMap = { dashboard: 'pageDashboard', input: 'pageInput', analysis: 'pageAnalysis', plans: 'pagePlans', matrix: 'pageMatrix', hooks: 'pageHooks', violations: 'pageViolations', accounts: 'pageAccounts' };
+    const pageMap = { dashboard: 'pageDashboard', input: 'pageInput', analysis: 'pageAnalysis', plans: 'pagePlans', matrix: 'pageMatrix', decision: 'pageDecision', hooks: 'pageHooks', violations: 'pageViolations', accounts: 'pageAccounts' };
     document.getElementById(pageMap[page] || 'pageDashboard').classList.add('show');
     if (page === 'dashboard') loadCockpit();
     if (page === 'violations') loadViolationStats();
     if (page === 'analysis') { loadAnalysis(); loadPublishTimeAnalysis(); }
     if (page === 'plans') loadPlans();
     if (page === 'matrix') loadMatrixPage();
+    if (page === 'decision') loadDecisionCenter();
     if (page === 'hooks') loadHooks();
     if (page === 'accounts') { loadAccounts(); }
 }
@@ -1845,6 +1942,165 @@ function toggleMoreNav(event) {
 function closeMoreNav() {
     clearTimeout(moreNavCloseTimer);
     document.querySelector('.more-nav')?.classList.remove('open');
+}
+
+let decisionCache = null;
+
+async function loadDecisionCenter() {
+    const targets = ['decisionSuggestions', 'materialStatusBoard', 'directionDecisionList', 'reviewVideoList', 'decisionBatchList', 'reusableVideoList'];
+    targets.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<div class="dashboard-empty">加载中...</div>';
+    });
+    try {
+        const res = await fetch('/api/decision-center');
+        decisionCache = await res.json();
+        renderDecisionSuggestions(decisionCache.suggestions || []);
+        renderMaterialStatus(decisionCache.review?.status_counts || []);
+        renderDirectionDecisionList(decisionCache.directions || []);
+        renderReviewVideoList(decisionCache.review?.videos || []);
+        renderDecisionBatchList(decisionCache.batches || []);
+        renderReusableVideoList(decisionCache.review?.reusable_videos || []);
+    } catch (err) {
+        targets.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<div class="dashboard-empty">决策数据加载失败</div>';
+        });
+    }
+}
+
+function renderDecisionSuggestions(items) {
+    const el = document.getElementById('decisionSuggestions');
+    if (!el) return;
+    if (!items.length) {
+        el.innerHTML = '<div class="dashboard-empty">暂无行动建议</div>';
+        return;
+    }
+    el.innerHTML = items.map(s => `<div class="decision-suggestion ${esc(s.level || 'medium')}">
+        <div>
+            <strong>${esc(s.title || '-')}</strong>
+            <span>${esc(s.desc || '')}</span>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="handleDecisionAction('${esc(s.action || '')}')">${esc(s.action || '查看')}</button>
+    </div>`).join('');
+}
+
+function handleDecisionAction(action) {
+    if (action.includes('视频库') || action.includes('录入')) switchPage('input');
+    else if (action.includes('违规')) switchPage('violations');
+    else switchPage('decision');
+}
+
+function renderMaterialStatus(items) {
+    const el = document.getElementById('materialStatusBoard');
+    if (!el) return;
+    const statuses = ['待发布', '已发布', '待复盘', '可复用', '已淘汰', '违规待处理'];
+    const map = Object.fromEntries((items || []).map(i => [i.status, i.count]));
+    el.innerHTML = statuses.map(s => `<div class="material-status-card">
+        <strong>${fmtNum(map[s] || 0)}</strong>
+        <span>${s}</span>
+    </div>`).join('');
+}
+
+function renderDirectionDecisionList(items) {
+    const el = document.getElementById('directionDecisionList');
+    if (!el) return;
+    if (!items.length) {
+        el.innerHTML = '<div class="dashboard-empty">暂无方向数据</div>';
+        return;
+    }
+    el.innerHTML = items.slice(0, 12).map((d, idx) => `<div class="direction-decision-row">
+        <div class="direction-rank">${idx + 1}</div>
+        <div class="direction-main">
+            <div class="direction-name"><span style="background:${esc(d.direction_color || '#e94560')}"></span>${esc(d.direction_name || '-')}</div>
+            <div class="direction-meta">状态 ${esc(d.status || '-')} · 效果 ${esc(d.effect_level || '-')} · ${fmtNum(d.video_count || 0)} 条</div>
+        </div>
+        <div class="direction-metric"><strong>${fmtNum(d.avg_play || 0)}</strong><span>均播</span></div>
+        <div class="direction-metric"><strong>${d.avg_interaction_rate || 0}%</strong><span>互动</span></div>
+        <div class="direction-metric"><strong>${d.avg_completion_rate || 0}%</strong><span>完播</span></div>
+        <div class="direction-score"><strong>${d.score || 0}</strong><span>${esc(d.decision || '观察')}</span></div>
+    </div>`).join('');
+}
+
+function renderReviewVideoList(videos) {
+    const el = document.getElementById('reviewVideoList');
+    if (!el) return;
+    if (!videos.length) {
+        el.innerHTML = '<div class="dashboard-empty">暂无待复盘视频</div>';
+        return;
+    }
+    el.innerHTML = videos.map(v => `<div class="review-video-card">
+        <div class="review-video-top">
+            <div>
+                <strong title="${esc(v.title || '')}">${esc(v.title || '未命名视频')}</strong>
+                <span>${esc(v.direction_name || '未分配方向')} · ${esc(v.material_status || '已发布')}</span>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="quickReviewVideo(${v.id})">复盘</button>
+        </div>
+        <div class="review-video-stats">
+            <span>播放 ${fmtNum(v.play_count || 0)}</span>
+            <span>评论 ${fmtNum(v.comment_count || 0)}</span>
+            <span>评论率 ${v.comment_rate || 0}%</span>
+            <span>互动 ${v.interaction_rate || 0}%</span>
+        </div>
+        <div class="review-video-note">${esc(v.reusable_point || v.comment_trigger_text || v.review_summary || v.failure_reason || '还没有复盘结论')}</div>
+    </div>`).join('');
+}
+
+async function quickReviewVideo(id) {
+    const v = (decisionCache?.review?.videos || []).find(item => item.id === id)
+        || (decisionCache?.review?.reusable_videos || []).find(item => item.id === id);
+    const current = v || {};
+    const status = prompt('素材状态：待发布 / 已发布 / 待复盘 / 可复用 / 已淘汰 / 违规待处理', current.material_status || '待复盘');
+    if (status === null) return;
+    const reusable = prompt('可复用点，比如评论为什么多、标题/钩子哪里有效', current.reusable_point || current.comment_trigger_text || '');
+    if (reusable === null) return;
+    const next = prompt('下次测试动作', current.next_action || current.comment_reuse_advice || '');
+    if (next === null) return;
+    const res = await fetch(`/api/videos/${id}/review`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            material_status: status.trim() || '待复盘',
+            reusable_point: reusable.trim(),
+            next_action: next.trim(),
+            review_summary: reusable.trim(),
+            comment_reuse_advice: next.trim(),
+        }),
+    });
+    const data = await res.json();
+    showToast(data.success ? '复盘已保存' : '复盘保存失败', data.success ? 'success' : 'error');
+    if (data.success) loadDecisionCenter();
+}
+
+function renderDecisionBatchList(items) {
+    const el = document.getElementById('decisionBatchList');
+    if (!el) return;
+    if (!items.length) {
+        el.innerHTML = '<div class="dashboard-empty">暂无测试批次</div>';
+        return;
+    }
+    el.innerHTML = items.slice(0, 10).map(b => `<div class="decision-batch-card">
+        <div class="decision-batch-title">${esc(b.name || '-')}<span>${esc(b.status || '测试中')}</span></div>
+        <div class="decision-batch-meta">${esc(b.direction_name || '未绑定方向')} · ${fmtNum(b.video_count || 0)} 条 · 均播 ${fmtNum(b.avg_play || 0)}</div>
+        <div class="decision-batch-note">${esc(b.conclusion || b.goal || b.note || '暂无结论')}</div>
+    </div>`).join('');
+}
+
+function renderReusableVideoList(videos) {
+    const el = document.getElementById('reusableVideoList');
+    if (!el) return;
+    if (!videos.length) {
+        el.innerHTML = '<div class="dashboard-empty">暂无可复用经验</div>';
+        return;
+    }
+    el.innerHTML = videos.map(v => `<div class="reusable-video-item">
+        <div>
+            <strong>${esc(v.title || '未命名视频')}</strong>
+            <span>${esc(v.direction_name || '未分配方向')} · 播放 ${fmtNum(v.play_count || 0)} · 评论 ${fmtNum(v.comment_count || 0)}</span>
+        </div>
+        <p>${esc(v.reusable_point || v.comment_trigger_text || v.comment_reuse_advice || '暂无复用说明')}</p>
+    </div>`).join('');
 }
 
 document.addEventListener('click', (event) => {
@@ -3060,6 +3316,7 @@ async function submitVideo() {
             account_id: toIntOrNull(document.getElementById('fAccount').value || currentAccountId),
             interaction_hook_id: toIntOrNull(document.getElementById('fInteractionHook').value),
             test_batch_id: toIntOrNull(document.getElementById('fTestBatch').value),
+            material_status: document.getElementById('fMaterialStatus')?.value || '已发布',
             completion_rate: parseFloat(document.getElementById('fCompletionRate').value) || 0,
             duration: parseInt(document.getElementById('fDuration').value) || 0,
             publish_time: document.getElementById('fPublishTime').value || null,
@@ -3102,6 +3359,7 @@ function clearForm() {
     document.getElementById('fAccount').value = '';
     document.getElementById('fInteractionHook').value = '';
     document.getElementById('fTestBatch').value = '';
+    document.getElementById('fMaterialStatus').value = '已发布';
     showHookRecommendationHint('');
     if (_assInstances['fAccount']) _assInstances['fAccount'].setValue('', true);
     clearInputMedia();
@@ -3964,6 +4222,11 @@ async function openEdit(id) {
     document.getElementById('eViolationNote').value = v.violation_note || '';
     document.getElementById('eInteractionHook').value = v.interaction_hook_id || '';
     document.getElementById('eTestBatch').value = v.test_batch_id || '';
+    document.getElementById('eMaterialStatus').value = v.material_status || '已发布';
+    document.getElementById('eReviewSummary').value = v.review_summary || '';
+    document.getElementById('eReusablePoint').value = v.reusable_point || '';
+    document.getElementById('eFailureReason').value = v.failure_reason || '';
+    document.getElementById('eNextAction').value = v.next_action || '';
     document.getElementById('eCommentReason').value = v.comment_reason || '';
     document.getElementById('eCommentTrigger').value = v.comment_trigger_text || '';
     document.getElementById('eCommentAdvice').value = v.comment_reuse_advice || '';
@@ -4008,6 +4271,11 @@ async function saveEdit() {
             violation_note: document.getElementById('eViolationNote').value.trim(),
             interaction_hook_id: toIntOrNull(document.getElementById('eInteractionHook').value),
             test_batch_id: toIntOrNull(document.getElementById('eTestBatch').value),
+            material_status: document.getElementById('eMaterialStatus').value || '已发布',
+            review_summary: document.getElementById('eReviewSummary').value.trim(),
+            reusable_point: document.getElementById('eReusablePoint').value.trim(),
+            failure_reason: document.getElementById('eFailureReason').value.trim(),
+            next_action: document.getElementById('eNextAction').value.trim(),
             comment_reason: document.getElementById('eCommentReason').value.trim(),
             comment_trigger_text: document.getElementById('eCommentTrigger').value.trim(),
             comment_reuse_advice: document.getElementById('eCommentAdvice').value.trim(),
