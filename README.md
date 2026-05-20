@@ -68,6 +68,7 @@ python test_verify.py
 ├── requirements.txt        # Python 依赖
 ├── test_verify.py          # 接口和数据验证脚本
 ├── PROJECT_NOTES.md        # 项目接手记录和开发注意事项
+├── memory/                 # 长期记忆和按日期工作日志
 └── DataLens.spec           # PyInstaller 打包配置
 ```
 
