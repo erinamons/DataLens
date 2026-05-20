@@ -64,8 +64,7 @@ python test_verify.py
 ├── config.py               # 路径、端口和运行配置
 ├── web/
 │   ├── index.html          # 前端主页面
-│   ├── styles.css          # 前端样式
-│   └── test_select.html    # 本地测试页面
+│   └── styles.css          # 前端样式
 ├── requirements.txt        # Python 依赖
 ├── test_verify.py          # 接口和数据验证脚本
 └── DataLens.spec           # PyInstaller 打包配置
