@@ -442,7 +442,7 @@
             <button class="btn btn-primary" onclick="loadDecisionCenter()">刷新决策</button>
         </div>
         <div class="decision-layout">
-            <section class="decision-panel">
+            <section class="decision-panel" id="decisionReviewPanel">
                 <div class="decision-head">
                     <h3>今日行动建议</h3>
                     <span>按紧急程度排序</span>
@@ -457,7 +457,7 @@
                 <div id="materialStatusBoard" class="material-status-board"></div>
             </section>
         </div>
-        <section class="decision-panel">
+        <section class="decision-panel" id="decisionReusablePanel">
             <div class="decision-head">
                 <h3>方向决策榜</h3>
                 <span>综合通过状态、效果等级、播放、互动、完播和违规风险</span>
@@ -2047,9 +2047,35 @@ function renderDecisionSuggestions(items) {
 }
 
 function handleDecisionAction(action) {
-    if (action.includes('视频库') || action.includes('录入')) switchPage('input');
-    else if (action.includes('违规')) switchPage('violations');
-    else switchPage('decision');
+    if (action.includes('视频库') || action.includes('录入')) {
+        switchPage('input');
+        return;
+    }
+    if (action.includes('违规')) {
+        switchPage('violations');
+        return;
+    }
+    switchPage('decision');
+    setTimeout(() => {
+        if (action.includes('复盘')) {
+            setReviewFilter('hot');
+            focusDecisionSection('decisionReviewPanel');
+        } else if (action.includes('可复用') || action.includes('复用')) {
+            focusDecisionSection('decisionReusablePanel');
+        } else {
+            focusDecisionSection('decisionSuggestions');
+        }
+    }, 60);
+}
+
+function focusDecisionSection(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.remove('decision-focus');
+    void el.offsetWidth;
+    el.classList.add('decision-focus');
+    setTimeout(() => el.classList.remove('decision-focus'), 1800);
 }
 
 function renderMaterialStatus(items) {

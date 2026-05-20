@@ -33,6 +33,12 @@ body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f
 
 .decision-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: 18px; margin-bottom: 18px; }
 .decision-panel { background: #fff; border: 1px solid #edf0f3; border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(31,41,55,0.05); margin-bottom: 18px; }
+.decision-panel.decision-focus, .decision-suggestions.decision-focus { animation: decisionFocusPulse 1.6s ease; }
+@keyframes decisionFocusPulse {
+  0% { box-shadow: 0 0 0 0 rgba(233,69,96,0.28), 0 8px 24px rgba(31,41,55,0.05); border-color: #e94560; }
+  70% { box-shadow: 0 0 0 10px rgba(233,69,96,0), 0 8px 24px rgba(31,41,55,0.05); border-color: #e94560; }
+  100% { box-shadow: 0 8px 24px rgba(31,41,55,0.05); border-color: #edf0f3; }
+}
 .decision-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .decision-head h3 { margin: 0; font-size: 15px; color: #172033; }
 .decision-head span { color: #98a2b3; font-size: 12px; }
