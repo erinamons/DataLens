@@ -1,0 +1,831 @@
+DataLens UI 升级与功能扩展开发方案
+
+版本：2026-05-18
+项目路径：D:\workbuddy\douyin-data\
+目标文件类型：纯文本 TXT
+适用对象：后续接手的 AI、开发者、测试人员
+
+
+一、项目当前状态
+
+1. 项目定位
+DataLens 是一个面向抖音/短视频内容的数据管理与分析工具，当前以本地桌面方式运行，通过 FastAPI 提供本地服务，再用 Edge app 模式或浏览器打开前端页面。
+
+2. 技术栈
+后端：Python + FastAPI
+数据库：SQLite
+前端：单文件 HTML/CSS/JavaScript
+图表：Chart.js CDN
+主要前端文件：D:\workbuddy\douyin-data\web\index.html
+主要后端文件：D:\workbuddy\douyin-data\server.py
+主要数据库文件：D:\workbuddy\douyin-data\database.py
+配置文件：D:\workbuddy\douyin-data\config.py
+服务端口：8900
+
+3. 当前已实现功能
+视频数据录入：标题、播放量、点赞数、评论数、分享数、发布日期、素材方向标签。
+视频管理：列表、搜索、日期筛选、标签筛选、排序、分页、编辑、删除、批量打标签、批量删除。
+文件能力：视频上传、视频播放、封面上传、CSV 导入导出。
+分析页：素材方向统计、平均播放、平均互动率、趋势图、方向排名、数据洞察。
+计划页：每日计划 CRUD、完成状态、优先级、日期切换、进度面板、筛选、TXT 导出。
+
+4. 当前页面结构
+顶部导航目前为三个标签：录入、分析、计划。
+需要升级为四个主导航：工作台、视频库、分析、计划。
+其中“录入”不再作为主页面名称，而应融入“视频库”的录入区或新增按钮中。
+
+5. 用户明确要求
+界面不要出现 emoji。
+输出和方案尽量使用中文、纯文本、TXT。
+设计风格要比当前更专业、更干净、更高级。
+功能不要只停留在录入表格，要更像一个内容运营工作台。
+
+
+二、升级总目标
+
+本次升级的目标不是简单美化，而是把 DataLens 从“数据录入表格工具”升级为“内容运营决策工作台”。
+
+目标效果：
+1. 打开应用后先看到工作台首页，能快速知道今天要做什么、数据表现怎么样、哪些内容值得复盘。
+2. 视频库从“录入页”升级为“素材资产管理页”，支持更舒服的录入、筛选、浏览和批量操作。
+3. 分析页从“几个图表”升级为“结论优先”的分析页面，先给运营建议，再给图表。
+4. 计划页从“待办列表”升级为“日程时间线”，更适合一天内容工作的安排。
+5. 全局视觉统一，浅色、干净、专业，不能出现 emoji，使用文字、线性 SVG、CSS 图形代替。
+
+
+三、设计规范
+
+1. 禁止项
+禁止使用 emoji。
+禁止使用花哨霓虹风。
+禁止使用过度饱和的紫蓝渐变。
+禁止在管理后台中使用过于娱乐化的字体和装饰。
+禁止使用纯黑大面积背景。
+禁止为了炫技牺牲可读性。
+
+2. 推荐视觉方向
+整体风格：浅色专业、干净、轻量、高级。
+背景色：#f6f7fb 或 #f8fafc。
+主文字：#111827。
+次级文字：#64748b。
+边框色：#e5e7eb 或 #e2e8f0。
+卡片背景：#ffffff。
+主强调色：沿用当前 #e94560，但降低使用面积，只用于按钮、激活态、重点数字。
+辅助色：
+成功：#16a34a
+警告：#f59e0b
+信息：#2563eb
+危险：#dc2626
+
+3. 字体与间距
+字体继续使用系统字体：-apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif。
+页面最大宽度建议 1440px。
+容器左右 padding 建议 24px 到 32px。
+卡片圆角建议 16px 到 24px。
+卡片阴影建议轻量：0 10px 30px rgba(15, 23, 42, 0.06)。
+卡片边框建议：1px solid rgba(226, 232, 240, 0.8)。
+
+4. 交互规范
+按钮需要 hover、active、disabled 状态。
+表单需要 focus 状态。
+数据加载时不能空白，应显示 loading skeleton 或轻量加载态。
+无数据时必须有空状态，不用 emoji，用 SVG 线性图标或 CSS 图形。
+危险操作必须确认，例如删除视频、批量删除、删除标签。
+
+5. 图标规范
+不使用 emoji。
+可以使用内联 SVG。
+可以使用纯文字按钮。
+可以使用 CSS 绘制的简单形状，如圆点、线条、进度条、状态标记。
+当前已有的 +、×、X、↓、↑ 可以保留，但建议统一为 SVG 或文字。
+
+
+四、信息架构升级
+
+升级后的导航：
+1. 工作台
+2. 视频库
+3. 分析
+4. 计划
+
+各页面职责：
+
+1. 工作台
+作为默认首页。
+展示今日内容工作和核心数据概览。
+重点是“现在该做什么”。
+
+2. 视频库
+承载当前录入页的所有功能。
+将录入表单、筛选栏、视频列表、批量操作整合得更专业。
+页面名称从“录入”改为“视频库”。
+
+3. 分析
+保留当前图表能力，但升级为结论优先。
+先显示核心结论，再显示图表和排名。
+
+4. 计划
+保留当前 CRUD 能力，但视觉改成时间线或日程面板。
+重点展示一天任务安排、完成率和优先级。
+
+
+五、后端升级方案
+
+本次必须新增一个工作台接口：GET /api/dashboard
+该接口由 server.py 暴露，由 database.py 提供查询函数。
+
+1. server.py 需要修改的位置
+文件：D:\workbuddy\douyin-data\server.py
+
+在 import database 的区域增加：
+get_dashboard_summary
+
+在分析 API 或计划 API 前后增加接口：
+GET /api/dashboard
+
+建议接口代码：
+
+@app.get("/api/dashboard")
+def api_dashboard():
+    return get_dashboard_summary()
+
+2. database.py 需要新增函数
+文件：D:\workbuddy\douyin-data\database.py
+
+新增函数名：get_dashboard_summary()
+
+返回结构建议：
+{
+    "today": "2026-05-18",
+    "totals": {
+        "video_count": 0,
+        "total_play": 0,
+        "avg_play": 0,
+        "avg_interaction_rate": 0,
+        "tag_count": 0
+    },
+    "today_plans": {
+        "total": 0,
+        "done": 0,
+        "pending": 0,
+        "completion_rate": 0,
+        "high_pending": 0
+    },
+    "best_tag": {
+        "tag_id": null,
+        "tag_name": "-",
+        "avg_play": 0,
+        "avg_interaction_rate": 0,
+        "video_count": 0
+    },
+    "top_videos": [],
+    "recent_videos": [],
+    "todo_plans": [],
+    "insights": []
+}
+
+3. get_dashboard_summary 查询逻辑
+
+today 使用 Python date.today().isoformat()。
+
+总视频数：
+SELECT COUNT(*) FROM videos
+
+总播放量：
+SELECT COALESCE(SUM(play_count), 0) FROM videos
+
+平均播放量：
+SELECT ROUND(AVG(play_count), 0) FROM videos
+如果没有数据，返回 0。
+
+平均互动率：
+公式：
+CASE WHEN play_count > 0 THEN (like_count + comment_count + share_count) * 100.0 / play_count ELSE 0 END
+然后取 AVG，保留两位。
+
+标签数量：
+SELECT COUNT(*) FROM tags
+
+今日计划：
+SELECT COUNT(*) total,
+       SUM(CASE WHEN done=1 THEN 1 ELSE 0 END) done,
+       SUM(CASE WHEN done=0 THEN 1 ELSE 0 END) pending,
+       SUM(CASE WHEN done=0 AND priority='高' THEN 1 ELSE 0 END) high_pending
+FROM plans
+WHERE plan_date=?
+
+最佳方向：
+可以复用 get_tag_analysis() 的结果，取 avg_play 最高的标签。
+注意 get_tag_analysis 已包含“未分类”。
+
+Top 视频：
+复用 get_top_videos(5, "play_count")。
+
+最近视频：
+SELECT v.*, interaction_rate FROM videos v ORDER BY created_at DESC LIMIT 5
+并附带 tags。
+如果不想重复写 tag 查询，可后续抽公共函数。
+
+待办计划：
+SELECT * FROM plans WHERE plan_date=? AND done=0 ORDER BY priority 排序, time_from, id LIMIT 6
+优先级排序建议：高、中、低。
+SQLite 可用 CASE：
+ORDER BY CASE priority WHEN '高' THEN 1 WHEN '中' THEN 2 ELSE 3 END, time_from, id
+
+insights 自动生成逻辑：
+如果没有视频：提示“先录入视频数据，工作台会自动生成内容洞察。”
+如果有高优先待办：提示“今天还有 X 个高优先任务未完成，建议先处理。”
+如果最佳方向存在：提示“当前表现最好的方向是 XXX，平均播放 XXX。”
+如果平均互动率低于 2：提示“整体互动率偏低，可以优化标题、封面和互动引导。”
+如果最近视频为空：不显示该项。
+
+4. 不建议新增数据库表
+本次 UI 升级和工作台不需要新增表。
+后续如果做“复盘字段”和“选题库”，再考虑新增表。
+
+5. 未来可选表结构，不在第一阶段强制实施
+如果后续要做复盘字段，可在 videos 表新增：
+hook_text TEXT
+cover_note TEXT
+review_note TEXT
+content_type TEXT
+
+如果后续要做选题库，可新增 ideas 表：
+id INTEGER PRIMARY KEY AUTOINCREMENT
+title TEXT NOT NULL
+source TEXT
+status TEXT DEFAULT '待制作'
+tag_id INTEGER
+note TEXT
+created_at TEXT DEFAULT datetime('now','localtime')
+
+
+六、前端升级方案
+
+核心文件：D:\workbuddy\douyin-data\web\index.html
+由于当前项目是单文件前端，本次仍然在 index.html 内完成，不拆 React/Vue，降低改造风险。
+
+1. 全局 CSS 重构
+在 style 标签内新增一组设计变量：
+
+:root {
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --surface-soft: #f8fafc;
+    --text: #111827;
+    --muted: #64748b;
+    --border: #e5e7eb;
+    --primary: #e94560;
+    --primary-dark: #d63851;
+    --success: #16a34a;
+    --warning: #f59e0b;
+    --info: #2563eb;
+    --danger: #dc2626;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+把现有硬编码颜色逐步替换为变量。
+body 背景从 #f0f2f5 改为 var(--bg)。
+卡片统一使用 .panel 或 .premium-card 类。
+
+2. 顶部导航升级
+当前代码：
+录入、分析、计划
+
+改为：
+工作台、视频库、分析、计划
+
+HTML 修改：
+<div class="tab active" onclick="switchPage('dashboard')">工作台</div>
+<div class="tab" onclick="switchPage('library')">视频库</div>
+<div class="tab" onclick="switchPage('analysis')">分析</div>
+<div class="tab" onclick="switchPage('plans')">计划</div>
+
+logo 可保留 DataLens，但建议增加副标题：Content Workspace。
+
+3. 页面 ID 修改
+新增：pageDashboard
+把原 pageInput 改名为 pageLibrary，或者保留 pageInput 的 id 但 switchPage 内映射 library 到 pageInput。
+推荐为了少改代码，保留原 id：pageInput，但导航显示“视频库”。
+更清晰的做法是将 id 改为 pageLibrary，并同步替换所有引用。
+
+建议采用清晰做法：
+pageInput -> pageLibrary
+switchPage 映射：
+const tabMap = { dashboard: 0, library: 1, analysis: 2, plans: 3 };
+const pageMap = { dashboard: 'pageDashboard', library: 'pageLibrary', analysis: 'pageAnalysis', plans: 'pagePlans' };
+
+初始化时默认显示 dashboard。
+DOMContentLoaded 中：loadDashboard(); loadTags(); loadVideos();
+
+4. 新增工作台 HTML 结构
+插入位置：container 内，视频库页面之前。
+
+结构建议：
+
+<div id="pageDashboard" class="page show">
+    <section class="hero-panel dashboard-hero">
+        <div>
+            <div class="eyebrow">内容运营工作台</div>
+            <h1>今天的内容表现和任务，一屏看清</h1>
+            <p>集中查看核心数据、待办计划、热门视频和方向建议。</p>
+        </div>
+        <div class="hero-actions">
+            <button class="btn btn-primary" onclick="switchPage('library')">录入新视频</button>
+            <button class="btn btn-outline" onclick="switchPage('plans')">查看今日计划</button>
+        </div>
+    </section>
+
+    <section class="dashboard-kpis" id="dashboardKpis"></section>
+
+    <section class="dashboard-grid">
+        <div class="dashboard-main-card">
+            <div class="section-head">
+                <div>
+                    <h3>今日待办</h3>
+                    <p>优先处理未完成的高优先级任务</p>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="switchPage('plans')">进入计划</button>
+            </div>
+            <div id="dashboardPlans"></div>
+        </div>
+
+        <div class="dashboard-side-card">
+            <div class="section-head">
+                <div>
+                    <h3>内容洞察</h3>
+                    <p>根据已有数据自动生成</p>
+                </div>
+            </div>
+            <div id="dashboardInsights"></div>
+        </div>
+    </section>
+
+    <section class="dashboard-grid two-col">
+        <div class="dashboard-main-card">
+            <div class="section-head">
+                <div>
+                    <h3>热门视频</h3>
+                    <p>按播放量排序</p>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="switchPage('analysis')">查看分析</button>
+            </div>
+            <div id="dashboardTopVideos"></div>
+        </div>
+
+        <div class="dashboard-main-card">
+            <div class="section-head">
+                <div>
+                    <h3>最近录入</h3>
+                    <p>快速回到刚添加的内容</p>
+                </div>
+            </div>
+            <div id="dashboardRecentVideos"></div>
+        </div>
+    </section>
+</div>
+
+5. 工作台 CSS 建议
+新增类：
+.hero-panel
+.eyebrow
+.dashboard-kpis
+.kpi-card
+.dashboard-grid
+.dashboard-main-card
+.dashboard-side-card
+.section-head
+.mini-list
+.mini-list-item
+.insight-list
+.insight-line
+.status-dot
+
+风格要求：
+卡片要轻，留白足。
+KPI 卡片使用 4 到 5 个 bento 卡片，不要做传统死板表格。
+状态用圆点和文字，不用 emoji。
+
+6. 工作台 JS 新增变量与函数
+新增全局变量：
+let dashboardData = null;
+
+新增函数：
+loadDashboard()
+renderDashboard(data)
+renderDashboardKpis(data)
+renderDashboardPlans(plans)
+renderDashboardInsights(insights)
+renderDashboardTopVideos(videos)
+renderDashboardRecentVideos(videos)
+
+loadDashboard 示例：
+async function loadDashboard() {
+    const res = await fetch('/api/dashboard');
+    const data = await res.json();
+    dashboardData = data;
+    renderDashboard(data);
+}
+
+switchPage 中：
+if (page === 'dashboard') loadDashboard();
+
+7. KPI 渲染内容
+建议显示五个卡片：
+总视频
+总播放
+平均播放
+平均互动率
+今日计划完成率
+
+每个卡片结构：
+<div class="kpi-card">
+    <div class="kpi-label">总视频</div>
+    <div class="kpi-value">123</div>
+    <div class="kpi-sub">已录入内容数</div>
+</div>
+
+8. 今日待办渲染
+显示 todo_plans 最多 6 条。
+每条展示时间、标题、优先级。
+无数据时显示“今日暂无待办计划”。
+
+9. 内容洞察渲染
+insights 是字符串数组。
+每条用左侧竖线或小圆点显示，不用 emoji。
+
+10. 热门视频渲染
+显示 top_videos 最多 5 条。
+字段：标题、播放、互动率、标签。
+点击可跳转视频库，但当前没有定位到具体视频的能力。第一阶段只做展示和“查看分析”。
+
+11. 最近录入渲染
+显示 recent_videos 最多 5 条。
+字段：标题、日期、播放。
+
+
+七、视频库页面升级
+
+1. 页面命名
+原“录入页”改名为“视频库”。
+顶部区域不再只像表单，应像资产管理页面。
+
+2. 布局建议
+将页面分成三块：
+顶部概览条：当前筛选结果、总数、导入导出按钮。
+录入面板：默认可折叠，点击“录入新视频”展开。
+视频资产表：保留现有表格，但视觉升级。
+
+3. 录入表单优化
+当前录入表单一直占据页面顶部，数据多时会显得笨重。
+建议：
+默认折叠，只显示“录入新视频”按钮。
+点击后展开表单。
+录入成功后自动折叠或清空，具体可选择自动清空并保持展开。
+
+如果不想增加复杂状态，第一阶段可保持展开，但样式改成高级卡片。
+
+4. 筛选栏优化
+当前标签筛选和搜索日期分散。
+建议整合为一个 filter-panel：
+关键词搜索
+日期范围
+标签 chips
+导出 CSV
+导入 CSV
+总数
+
+5. 表格视觉优化
+表头背景更浅。
+行 hover 更柔和。
+封面尺寸可从 48x36 升级为 64x44。
+标题列最大宽度可以放宽到 280px。
+标签 badge 颜色统一，避免过多彩色干扰。
+互动率可用文字颜色加轻量背景。
+
+6. 批量操作栏优化
+当前橙色背景略像警告。
+建议改为固定浮动或轻量蓝灰面板：
+已选择 X 条
+打标签
+批量删除
+取消选择
+
+危险按钮仍使用红色。
+
+
+八、分析页升级
+
+1. 结构顺序调整
+当前顺序：日期筛选 -> 统计卡 -> 图表 -> 趋势 -> 排名 -> 洞察。
+建议顺序：
+分析标题和日期筛选
+核心结论卡片
+统计 KPI
+图表区
+素材方向排名
+趋势详情
+
+2. 核心结论前置
+将当前 generateInsights 的内容移动到页面上方，以更明显的卡片展示。
+标题可用“核心结论”。
+每条结论用普通文本，不用 emoji。
+
+3. 图表视觉
+Chart.js 保留。
+颜色使用统一调色板，不要太花。
+bar 圆角保留。
+tooltip 可以优化，但第一阶段不强制。
+
+4. 排名交互
+当前点击方向排名加载趋势，保留。
+需要在 UI 上明确“点击任一方向查看趋势”。
+
+5. 未分类处理
+当前后端 get_tag_analysis 已经把未打标签视频归入“未分类”。
+前端不要过滤掉 tag_id=-1。
+但注意 get_tag_trend 当前需要 vt.tag_id，对于 -1 未分类没有趋势数据。
+如果点击“未分类”，第一阶段可显示空状态。
+第二阶段可在 get_tag_trend 中专门支持 tag_id=-1。
+
+
+九、计划页升级
+
+1. 保留功能
+日期切换
+新增计划
+编辑计划
+删除计划
+标记完成
+优先级筛选
+TXT 导出
+进度面板
+
+2. 视觉升级为时间线
+当前计划列表是普通列表。
+建议每条计划左侧增加时间线结构：
+左侧显示时间段。
+中间一条竖线和节点。
+右侧显示任务标题、优先级、操作。
+
+3. 时间展示
+如果有 time_from 和 time_to：显示 09:00 - 10:00
+如果只有 time_from：显示 09:00 起
+如果没有时间：显示 未安排时间
+
+4. 完成态
+完成后降低透明度，标题加删除线可以保留。
+勾选框不使用 emoji，使用 CSS 或 HTML 实体 &#10003; 可以保留。
+
+5. 空状态
+当前已有 SVG 空状态，可保留并统一视觉。
+文字改为更专业：
+“今天还没有计划，可以先安排一个内容任务。”
+
+
+十、前端函数修改清单
+
+必须修改：
+1. DOMContentLoaded
+默认加载 dashboard。
+同时初始化日期、标签、视频。
+
+2. switchPage(page)
+支持 dashboard 和 library。
+tabMap 改为四项。
+pageMap 改为四项。
+切到 dashboard 时 loadDashboard。
+切到 analysis 时 loadAnalysis。
+切到 plans 时 loadPlans。
+切到 library 时 loadVideos。
+
+3. HTML 导航
+录入改为工作台和视频库。
+
+4. HTML 页面容器
+新增 pageDashboard。
+原 pageInput 改 pageLibrary 或映射为 library。
+
+5. 新增工作台渲染函数
+loadDashboard
+renderDashboard
+renderDashboardKpis
+renderDashboardPlans
+renderDashboardInsights
+renderDashboardTopVideos
+renderDashboardRecentVideos
+
+6. fmtNum 保留
+工作台和分析页都需要使用。
+
+7. esc 保留
+所有插入标题、标签名、计划标题的 HTML 都要使用 esc。
+
+8. showToast 保留
+用于错误提示和成功提示。
+
+
+十一、后端函数修改清单
+
+server.py：
+1. 从 database import 区域引入 get_dashboard_summary。
+2. 新增 GET /api/dashboard。
+
+数据库 database.py：
+1. import date：
+from datetime import date
+如果已有其他 datetime 相关 import，注意不要冲突。
+
+2. 新增 get_dashboard_summary()。
+3. 可选新增辅助函数 _get_recent_videos(limit=5)，减少重复。
+4. 可选新增辅助函数 _attach_tags(conn, row)，减少 get_videos 和 get_top_videos 的重复标签查询。
+
+注意：
+第一阶段不要大规模重构已有数据库函数，避免引入回归 bug。
+优先新增函数，少改老逻辑。
+
+
+十二、执行顺序建议
+
+第一步：备份 index.html、server.py、database.py。
+建议复制为：
+web/index.html.bak
+server.py.bak
+database.py.bak
+
+第二步：实现 database.py 的 get_dashboard_summary。
+先单独用 Python 或浏览器请求测试函数返回结构。
+
+第三步：实现 server.py 的 /api/dashboard。
+运行服务后访问：
+http://127.0.0.1:8900/api/dashboard
+确认返回 JSON 正常。
+
+第四步：修改 index.html 的导航和页面映射。
+确保四个页面切换都正常。
+
+第五步：新增工作台 HTML、CSS、JS。
+先让工作台能正常显示静态结构，再接接口数据。
+
+第六步：升级全局 CSS 变量和卡片样式。
+先不要一次性替换全部旧样式，先新增新样式，逐步套到新页面。
+
+第七步：升级视频库、分析页、计划页视觉。
+优先改 CSS 和结构，不要先动业务逻辑。
+
+第八步：运行测试。
+必须运行已有测试：
+D:\Python\python.exe D:\workbuddy\douyin-data\test_verify.py
+如果有 test_plans_analysis.py，也运行：
+D:\Python\python.exe D:\workbuddy\douyin-data\test_plans_analysis.py
+
+第九步：手动验证浏览器。
+启动服务：
+D:\Python\python.exe D:\workbuddy\douyin-data\server.py
+访问：
+http://127.0.0.1:8900
+检查四个页面。
+
+
+十三、验收清单
+
+后端验收：
+1. /api/dashboard 返回 200。
+2. /api/dashboard 即使没有视频、没有计划，也不报错。
+3. /api/dashboard 的 totals 字段完整。
+4. /api/dashboard 的 today_plans 字段完整。
+5. best_tag 在没有数据时返回安全默认值。
+6. top_videos、recent_videos、todo_plans 都是数组。
+7. insights 是字符串数组。
+8. 原有 /api/videos、/api/tags、/api/analysis、/api/plans 不受影响。
+
+前端验收：
+1. 默认打开是“工作台”。
+2. 顶部导航显示：工作台、视频库、分析、计划。
+3. 不出现 emoji。
+4. 工作台 KPI 正常显示。
+5. 今日待办为空时有空状态。
+6. 热门视频为空时有空状态。
+7. 最近录入为空时有空状态。
+8. 点击“录入新视频”能进入视频库。
+9. 点击“查看今日计划”能进入计划页。
+10. 视频库原有录入、编辑、删除、筛选、分页、上传、播放功能不坏。
+11. 分析页图表正常加载。
+12. 计划页新增、编辑、删除、完成、导出 TXT 正常。
+13. 移动端宽度下页面不横向炸裂，至少 390px 宽度可用。
+14. 删除、批量删除仍有确认。
+
+视觉验收：
+1. 页面整体是浅色专业风格。
+2. 卡片圆角、边框、阴影统一。
+3. 主色 #e94560 不要大面积铺满。
+4. 表格可读性比原来更强。
+5. 空状态不用 emoji。
+6. 按钮 hover/focus/disabled 状态清晰。
+7. 页面切换不出现明显布局跳动。
+
+测试验收：
+1. test_verify.py 全部通过。
+2. 如果存在 test_plans_analysis.py，必须全部通过。
+3. 手动访问 /api/dashboard 通过。
+4. 浏览器控制台无 JavaScript 报错。
+5. 刷新页面后默认日期仍正确。
+
+
+十四、建议给后续 AI 的执行提示词
+
+你正在接手 DataLens 项目，路径为 D:\workbuddy\douyin-data\。
+请严格按 D:\workbuddy\douyin-data\DataLens_UI升级开发方案.txt 执行。
+
+重要要求：
+1. 输出和界面都不要使用 emoji。
+2. 不要重写整个项目，不要引入 React/Vue，不要拆分前端架构。
+3. 当前前端是单文件 web/index.html，请在现有结构上升级。
+4. 当前后端是 FastAPI + SQLite，请新增 /api/dashboard，不要破坏已有 API。
+5. 先实现后端 dashboard 数据，再做前端工作台。
+6. 顶部导航升级为：工作台、视频库、分析、计划。
+7. 默认首页是工作台。
+8. 视觉风格为浅色、专业、干净、卡片化。
+9. 修改后必须运行 test_verify.py。
+10. 如果存在 test_plans_analysis.py，也必须运行。
+11. 交付时说明修改了哪些文件、如何运行、测试结果。
+
+
+十五、阶段划分
+
+第一阶段：必须完成
+1. 新增 /api/dashboard。
+2. 新增工作台首页。
+3. 导航改为四项。
+4. 全局视觉基础升级。
+5. 不出现 emoji。
+6. 原有功能不回归。
+
+第二阶段：建议完成
+1. 视频库录入面板折叠。
+2. 分析页核心结论前置。
+3. 计划页时间线样式。
+4. 更完整的 loading、empty、error 状态。
+
+第三阶段：后续扩展
+1. 视频复盘字段。
+2. 选题库。
+3. 方向对比报告导出。
+4. 周报/月报 TXT 导出。
+5. 更细粒度的数据趋势分析。
+
+
+十六、注意事项
+
+1. 不要把 503 upstream 当成本地 DataLens 代码问题。
+之前访问 https://kqsgaywafmtx.sealoshzh.site 出现 503 no healthy upstream，这是外部部署服务问题，不代表本地 FastAPI 代码错误。
+本地验证以 http://127.0.0.1:8900 为准。
+
+2. PowerShell 中文乱码不等于接口乱码。
+之前“未分类”乱码已确认是 PowerShell 解码问题，API 原始 UTF-8 正确，浏览器 fetch 正常。
+不要为此修改服务端中文字符串。
+
+3. 不要破坏日期默认值。
+当前前端用 new Date().toISOString().split('T')[0] 设置日期，格式为 YYYY-MM-DD，可保留。
+
+4. 不要删除 uploads、covers、data 目录。
+这些是用户数据目录，任何清理都必须单独确认。
+
+5. 不要为了 UI 升级引入大型依赖。
+当前 Chart.js 已通过 CDN 使用。第一阶段不需要新增 npm、打包器或前端框架。
+
+
+十七、完成后的交付说明模板
+
+完成后请按以下格式回复：
+
+已完成 DataLens UI 升级第一阶段。
+
+修改文件：
+1. database.py：新增 get_dashboard_summary。
+2. server.py：新增 GET /api/dashboard。
+3. web/index.html：新增工作台、导航升级、视觉样式升级、页面切换逻辑升级。
+
+新增能力：
+1. 工作台首页。
+2. 核心 KPI。
+3. 今日待办摘要。
+4. 内容洞察。
+5. 热门视频和最近录入。
+
+验证结果：
+1. /api/dashboard 返回正常。
+2. test_verify.py 通过。
+3. test_plans_analysis.py 通过，如存在。
+4. 浏览器手动验证通过。
+
+运行方式：
+D:\Python\python.exe D:\workbuddy\douyin-data\server.py
+然后打开：http://127.0.0.1:8900
+
+已知后续优化：
+1. 视频库录入面板可继续折叠化。
+2. 分析页可继续强化结论卡片。
+3. 计划页可继续做时间线视觉。
