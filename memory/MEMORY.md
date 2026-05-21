@@ -91,6 +91,7 @@ GitHub 推送需要显式走代理：
 - 账号矩阵：账号、平台、分组、方向、状态和矩阵健康度。
 - 工具：CSV 导入导出、备份恢复、数据质量检查、运营报告导出。
 - 决策中心：行动建议、方向决策榜、待复盘视频、素材状态、实验批次和可复用经验。
+- 抖音创作者中心扩展：通过本机浏览器扩展读取当前作品详情页可见数据，导入完播、平均播放时长、2s 跳出、5s 完播、平均播放占比、观看趋势和观后搜索词；工作台有“创作者扩展”使用入口。
 
 ## 不应提交的数据
 
@@ -127,3 +128,5 @@ __pycache__/
 - 视频复盘字段在 `videos` 表中：`material_status`、`review_summary`、`reusable_point`、`failure_reason`、`next_action`。
 - 测试批次增强字段在 `test_batches` 表中：`direction_id`、`goal`、`status`、`conclusion`、`next_action`。
 - 决策中心方向项应返回 `decision` 和 `decision_reason`，前端用它解释为什么推荐继续做、观察、降优先或先停。
+- 抖音创作者中心扩展位于 `browser-extension/douyin-creator-bridge/`，只读取当前页面可见数据并发送到 `POST /api/creator/douyin/import-current`，属于半自动采集，不做绕过登录或风控。
+- 创作者中心观看质量字段在 `videos` 表：`avg_watch_seconds`、`bounce_2s_rate`、`completion_5s_rate`、`avg_watch_ratio`、`watch_trend`、`post_watch_search_terms`。

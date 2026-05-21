@@ -98,6 +98,7 @@
                 <button class="btn btn-sm btn-outline" onclick="exportReport()">导出复盘报告</button>
                 <button class="btn btn-sm btn-outline" onclick="exportHooks()">导出钩子库</button>
                 <button class="btn btn-sm btn-outline" onclick="exportDirections()">导出方向实验</button>
+                <button class="btn btn-sm btn-outline" onclick="openCreatorBridgeModal()">创作者扩展</button>
             </div>
         </div>
     </div>
@@ -316,6 +317,8 @@
 
         <!-- 快捷筛选 -->
         <div class="quick-filters" id="quickFilters">
+            <button class="qf-btn" data-filter="today" onclick="applyQuickFilter('today')">今天</button>
+            <button class="qf-btn" data-filter="yesterday" onclick="applyQuickFilter('yesterday')">昨天</button>
             <button class="qf-btn" data-filter="7d" onclick="applyQuickFilter('7d')">近7天</button>
             <button class="qf-btn" data-filter="30d" onclick="applyQuickFilter('30d')">近30天</button>
             <button class="qf-btn" data-filter="violation" onclick="applyQuickFilter('violation')">有违规</button>
@@ -346,7 +349,7 @@
                 <option value="violation">有违规</option>
                 <option value="none">无违规</option>
             </select>
-            <label style="font-size:12px;color:#888;margin-left:8px">账号：</label>
+            <label style="font-size:12px;color:#888;margin-left:8px">筛选账号：</label>
             <select id="filterAccount" class="input-sm" onchange="currentPage=1;loadVideos()">
                 <option value="">全部</option>
             </select>
@@ -356,9 +359,11 @@
         <div class="toolbar">
             <div class="toolbar-left">
                 <input class="search-box" id="searchInput" placeholder="搜索标题..." oninput="debouncedSearchVideos()">
-                <input class="date-input" type="date" id="dateFrom" onchange="loadVideos()" title="起始日期">
-                <span style="color:#999">~</span>
-                <input class="date-input" type="date" id="dateTo" onchange="loadVideos()" title="截止日期">
+                <div class="date-range-control">
+                    <input class="date-input smart-date-input" type="text" id="dateFrom" placeholder="年/月/日" onfocus="activateDateInput(this)" onblur="deactivateDateInput(this)" onchange="onVideoDateChange()" title="起始日期">
+                    <span>→</span>
+                    <input class="date-input smart-date-input" type="text" id="dateTo" placeholder="年/月/日" onfocus="activateDateInput(this)" onblur="deactivateDateInput(this)" onchange="onVideoDateChange()" title="截止日期">
+                </div>
             </div>
             <div class="toolbar-right">
                 <button class="btn btn-sm btn-outline" onclick="exportCSV()">导出 CSV</button>
@@ -368,6 +373,7 @@
                     <button class="active" id="viewDetail" onclick="setViewMode('detail')">详细</button>
                     <button id="viewCompact" onclick="setViewMode('compact')">紧凑</button>
                     <button id="viewLarge" onclick="setViewMode('large')">大图</button>
+                    <button id="viewOps" onclick="setViewMode('ops')">运营表格</button>
                 </div>
             </div>
         </div>
@@ -400,6 +406,39 @@
         <!-- 视频列表 -->
         <div class="video-library-large-wrap" id="videoLargeWrap">
             <div class="video-card-grid" id="videoCardGrid"></div>
+        </div>
+        <div class="ops-table-wrap" id="opsTableWrap">
+            <div class="ops-summary-grid" id="opsSummaryGrid"></div>
+            <div class="ops-table-tools">
+                <div class="ops-column-hint">拖动表头之间的分隔线调整列宽</div>
+                <button class="btn btn-sm btn-outline" onclick="resetOpsColumnWidths()">恢复默认列宽</button>
+            </div>
+            <div class="ops-table-card">
+                <table class="ops-table" id="opsTable">
+                    <colgroup id="opsColGroup"></colgroup>
+                    <thead>
+                        <tr>
+                            <th class="ops-sticky ops-check" data-col="check"><input type="checkbox" onchange="toggleSelectAll(this)"></th>
+                            <th class="ops-sticky ops-thumb-head" data-col="thumb">素材</th>
+                            <th class="ops-sticky ops-title-head" data-col="title">标题</th>
+                            <th data-col="publish">发布时间</th>
+                            <th data-col="account">账号</th>
+                            <th data-col="direction">方向</th>
+                            <th data-col="status">状态</th>
+                            <th class="num" data-col="play">播放</th>
+                            <th class="num" data-col="completion">完播</th>
+                            <th class="num" data-col="interaction">互动</th>
+                            <th class="num" data-col="comment">评论</th>
+                            <th class="num" data-col="favorite">收藏</th>
+                            <th data-col="violation">违规</th>
+                            <th data-col="review">复盘</th>
+                            <th data-col="actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opsVideoBody"></tbody>
+                </table>
+            </div>
+            <div class="ops-preview" id="opsPreview"></div>
         </div>
         <div class="table-card">
             <table>
@@ -885,7 +924,7 @@
     <div class="detail-drawer-body" id="detailDrawerBody"></div>
 </aside>
 <div class="modal-mask" id="editModal">
-    <div class="modal-box">
+    <div class="modal-box edit-video-modal">
         <div class="modal-header">
             <h3>编辑视频</h3>
             <button class="btn btn-sm btn-outline" onclick="closeEdit()">X</button>
@@ -1039,6 +1078,38 @@
 <div class="toast" id="toast"></div>
 <div class="undo-toast" id="undoToast"><span id="undoToastMsg"></span><button class="undo-btn" id="undoBtn">撤销</button></div>
 
+<div class="modal-mask" id="creatorBridgeModal">
+    <div class="modal-box creator-bridge-modal">
+        <div class="modal-header">
+            <h3>创作者中心导入扩展</h3>
+            <button class="btn btn-sm btn-outline" onclick="closeCreatorBridgeModal()">X</button>
+        </div>
+        <div class="modal-body">
+            <div class="bridge-panel">
+                <div>
+                    <div class="bridge-kicker">本机插件</div>
+                    <h4>把抖音创作者中心当前作品页的数据导入 DataLens</h4>
+                    <p>适合导入完播率、平均播放时长、2s 跳出率、5s 完播率、平均播放占比、观看趋势摘要和看完后常搜词。</p>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="copyCreatorBridgePath()">复制扩展目录</button>
+            </div>
+            <div class="bridge-path" id="creatorBridgePath">D:\workbuddy\douyin-data\browser-extension\douyin-creator-bridge</div>
+            <div class="bridge-steps">
+                <div><strong>1</strong><span>先启动 DataLens，本地接口保持在 127.0.0.1:8900。</span></div>
+                <div><strong>2</strong><span>在 Chrome 或 Edge 的扩展管理页打开开发者模式，加载上面的目录。</span></div>
+                <div><strong>3</strong><span>打开抖音创作者中心的作品详情页，等数据图表加载完成。</span></div>
+                <div><strong>4</strong><span>点击扩展里的“读取并发送”，导入后去视频库或复盘中心查看。</span></div>
+            </div>
+            <div class="bridge-note">
+                这个扩展只读取你当前已经登录且页面可见的数据，不处理登录、验证码或风控绕过。
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeCreatorBridgeModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-mask" id="reviewModal">
     <div class="modal-box review-modal-box">
         <div class="modal-header">
@@ -1048,6 +1119,7 @@
         <div class="modal-body">
             <div class="review-modal-title" id="reviewModalTitle">-</div>
             <div class="review-modal-stats" id="reviewModalStats"></div>
+            <div id="reviewCreatorInsights" class="review-creator-insights"></div>
             <div class="form-grid">
                 <div class="form-group">
                     <label>素材状态</label>
@@ -1771,6 +1843,7 @@ async function uploadPendingInputMedia(videoId) {
 class AccountSearchSelect {
     constructor({ el, placeholder, onChange, allowEmpty, emptyLabel, filterActive, compact }) {
         this.origSelect = el;
+        el.dataset.searchSelect = 'account';
         this.placeholder = placeholder || '选择账号';
         this.allowEmpty = allowEmpty !== false;
         this.emptyLabel = emptyLabel || '不绑定';
@@ -1872,7 +1945,7 @@ class AccountSearchSelect {
             html += accounts.map(a => {
                 const sel = String(a.id) === String(this._value) ? ' selected' : '';
                 const sub = a.platform ? `<span class="ass-item-sub">${esc(a.platform)}</span>` : '';
-                return `<div class="ass-item${sel}" data-value="${a.id}">${esc(a.name)}${sub}</div>`;
+                return `<div class="ass-item${sel}" data-value="${a.id}"><span class="ass-item-name">${esc(a.name)}</span>${sub}</div>`;
             }).join('');
         }
         this.listEl.innerHTML = html;
@@ -1887,6 +1960,16 @@ class AccountSearchSelect {
 
     // 外部调用来同步数据变化
     refresh() { this.updateLabel(); if (this._open) this.renderItems(); }
+
+    destroy() {
+        this.close();
+        this.origSelect.style.display = '';
+        this.origSelect.dataset.searchSelect = '';
+        if (this.wrapper?.parentNode) {
+            this.wrapper.parentNode.insertBefore(this.origSelect, this.wrapper);
+            this.wrapper.remove();
+        }
+    }
 }
 
 // 已创建的实例缓存
@@ -1895,8 +1978,13 @@ const _assInstances = {};
 function initAccountSearchSelect(id, opts) {
     const el = document.getElementById(id);
     if (!el) return null;
+    const cs = _csInstances[id];
+    if (cs) cs.destroy();
     // 如果已有实例，先销毁
-    if (_assInstances[id]) { delete _assInstances[id]; }
+    if (_assInstances[id]) {
+        _assInstances[id].destroy?.();
+        delete _assInstances[id];
+    }
     const inst = new AccountSearchSelect({ el, ...opts });
     _assInstances[id] = inst;
     return inst;
@@ -1923,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadBatches();
     // 初始化搜索式账号下拉
     initAccountSearchSelect('fAccount', { placeholder: '绑定账号', emptyLabel: '不绑定', filterActive: true });
-    initAccountSearchSelect('filterAccount', { placeholder: '全部账号', emptyLabel: '全部', filterActive: false, compact: true,
+    initAccountSearchSelect('filterAccount', { placeholder: '筛选账号', emptyLabel: '全部', filterActive: false, compact: true,
         onChange: () => { currentPage = 1; loadVideos(); }
     });
     initAccountSearchSelect('planAccountFilter', { placeholder: '所有账号', emptyLabel: '所有账号', filterActive: true, compact: true,
@@ -1935,6 +2023,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     initAccountSearchSelect('eAccount', { placeholder: '绑定账号', emptyLabel: '不绑定', filterActive: true });
     initInputFormKeyboardFlow();
     updateInputMediaStatus();
+    setVideoDateRange(localDateString(), localDateString());
+    document.querySelector('.qf-btn[data-filter="today"]')?.classList.add('active');
+    activeQuickFilter = 'today';
+    setViewMode(currentViewMode, false);
+    initOpsColumnResize();
     loadCockpit();
     loadVideos();
     loadQualityPanel();
@@ -2078,6 +2171,46 @@ function focusDecisionSection(id) {
     setTimeout(() => el.classList.remove('decision-focus'), 1800);
 }
 
+function parseJsonField(raw, fallback) {
+    if (!raw) return fallback;
+    if (typeof raw !== 'string') return raw;
+    try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+function renderWatchQuality(v) {
+    const has = (v.avg_watch_seconds || v.bounce_2s_rate || v.completion_5s_rate || v.avg_watch_ratio);
+    if (!has) return '';
+    return `<div class="watch-quality-grid">
+        <div><strong>${v.completion_rate || 0}%</strong><span>完播率</span></div>
+        <div><strong>${v.avg_watch_seconds || 0}秒</strong><span>平均播放时长</span></div>
+        <div><strong>${v.bounce_2s_rate || 0}%</strong><span>2s跳出率</span></div>
+        <div><strong>${v.completion_5s_rate || 0}%</strong><span>5s完播率</span></div>
+        <div><strong>${v.avg_watch_ratio || 0}%</strong><span>平均播放占比</span></div>
+    </div>`;
+}
+
+function renderPostWatchTerms(raw) {
+    const terms = parseJsonField(raw, []);
+    if (!Array.isArray(terms) || !terms.length) return '';
+    return `<div class="post-watch-terms">${terms.slice(0, 6).map(t => `
+        <div class="post-watch-term">
+            <span>${t.rank || ''}</span>
+            <strong>${esc(t.keyword || '')}</strong>
+            <em>${t.ratio ? `${t.ratio}%` : '-'}</em>
+        </div>`).join('')}</div>`;
+}
+
+function renderWatchTrendSummary(raw) {
+    const trend = parseJsonField(raw, {});
+    if (!trend || (!trend.summary && !(trend.drop_points || []).length)) return '';
+    const drops = Array.isArray(trend.drop_points) ? trend.drop_points : [];
+    const dropText = drops.length ? drops.map(p => `${p.second || 0}秒 ${p.label || '低谷'}`).join('、') : '';
+    return `<div class="watch-trend-summary">
+        ${trend.summary ? `<p>${esc(trend.summary)}</p>` : ''}
+        ${dropText ? `<p>低谷点：${esc(dropText)}</p>` : ''}
+    </div>`;
+}
+
 function renderMaterialStatus(items) {
     const el = document.getElementById('materialStatusBoard');
     if (!el) return;
@@ -2161,6 +2294,12 @@ function openReviewModal(id) {
         <span>评论率 ${v.comment_rate || 0}%</span>
         <span>互动 ${v.interaction_rate || 0}%</span>
     `;
+    const watchQuality = renderWatchQuality(v);
+    const postWatchTerms = renderPostWatchTerms(v.post_watch_search_terms);
+    const watchTrend = renderWatchTrendSummary(v.watch_trend);
+    document.getElementById('reviewCreatorInsights').innerHTML = (watchQuality || watchTrend || postWatchTerms)
+        ? `${watchQuality}${watchTrend}${postWatchTerms ? `<div style="margin-top:10px">${postWatchTerms}</div>` : ''}`
+        : '<div class="dashboard-empty">暂无创作者中心观看质量数据</div>';
     document.getElementById('reviewMaterialStatus').value = v.material_status || '待复盘';
     document.getElementById('reviewCommentReason').value = v.comment_reason || '';
     document.getElementById('reviewSummary').value = v.review_summary || '';
@@ -3096,6 +3235,24 @@ function exportReport() { window.open('/api/export/report', '_blank'); }
 function exportHooks() { window.open('/api/export/hooks', '_blank'); }
 function exportDirections() { window.open('/api/export/directions', '_blank'); }
 
+function openCreatorBridgeModal() {
+    document.getElementById('creatorBridgeModal').classList.add('show');
+}
+
+function closeCreatorBridgeModal() {
+    document.getElementById('creatorBridgeModal').classList.remove('show');
+}
+
+async function copyCreatorBridgePath() {
+    const text = document.getElementById('creatorBridgePath')?.textContent?.trim() || 'D:\\workbuddy\\douyin-data\\browser-extension\\douyin-creator-bridge';
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('已复制扩展目录');
+    } catch (e) {
+        showToast('复制失败，请手动复制目录', 'error');
+    }
+}
+
 async function openRestoreModal() {
     const el = document.getElementById('restoreBackupList');
     document.getElementById('restoreModal').classList.add('show');
@@ -3525,15 +3682,131 @@ function clearForm() {
 }
 
 // ── 视图模式切换 ──
-let currentViewMode = 'detail';
-function setViewMode(mode) {
+const VIDEO_VIEW_MODE_KEY = 'datalens_video_view_mode';
+let currentViewMode = localStorage.getItem(VIDEO_VIEW_MODE_KEY) || 'detail';
+const OPS_COLUMN_WIDTH_KEY = 'datalens_ops_column_widths';
+const OPS_COLUMN_ORDER = ['check', 'thumb', 'title', 'publish', 'account', 'direction', 'status', 'play', 'completion', 'interaction', 'comment', 'favorite', 'violation', 'review', 'actions'];
+const OPS_COLUMN_DEFAULTS = {
+    check: 44,
+    thumb: 74,
+    title: 280,
+    publish: 132,
+    account: 132,
+    direction: 128,
+    status: 108,
+    play: 92,
+    completion: 92,
+    interaction: 92,
+    comment: 92,
+    favorite: 92,
+    violation: 122,
+    review: 250,
+    actions: 132
+};
+const OPS_COLUMN_MIN = {
+    check: 44,
+    thumb: 62,
+    title: 170,
+    publish: 104,
+    account: 104,
+    direction: 104,
+    status: 90,
+    play: 78,
+    completion: 78,
+    interaction: 78,
+    comment: 78,
+    favorite: 78,
+    violation: 96,
+    review: 150,
+    actions: 118
+};
+let opsColumnWidths = loadOpsColumnWidths();
+
+function loadOpsColumnWidths() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(OPS_COLUMN_WIDTH_KEY) || '{}');
+        return OPS_COLUMN_ORDER.reduce((acc, key) => {
+            const value = Number(saved[key]);
+            acc[key] = Number.isFinite(value) && value > 0 ? value : OPS_COLUMN_DEFAULTS[key];
+            return acc;
+        }, {});
+    } catch (err) {
+        return { ...OPS_COLUMN_DEFAULTS };
+    }
+}
+
+function saveOpsColumnWidths() {
+    localStorage.setItem(OPS_COLUMN_WIDTH_KEY, JSON.stringify(opsColumnWidths));
+}
+
+function applyOpsColumnWidths() {
+    const table = document.getElementById('opsTable');
+    const colGroup = document.getElementById('opsColGroup');
+    if (!table || !colGroup) return;
+    colGroup.innerHTML = OPS_COLUMN_ORDER
+        .map(key => `<col data-col="${key}" style="width:${opsColumnWidths[key]}px">`)
+        .join('');
+    OPS_COLUMN_ORDER.forEach(key => {
+        table.style.setProperty(`--ops-col-${key}`, `${opsColumnWidths[key]}px`);
+    });
+    const totalWidth = OPS_COLUMN_ORDER.reduce((sum, key) => sum + opsColumnWidths[key], 0);
+    table.style.width = `${totalWidth}px`;
+    table.style.minWidth = `${totalWidth}px`;
+}
+
+function initOpsColumnResize() {
+    applyOpsColumnWidths();
+    document.querySelectorAll('#opsTable th[data-col]').forEach(th => {
+        if (th.dataset.resizeInit === '1') return;
+        th.dataset.resizeInit = '1';
+        const col = th.dataset.col;
+        if (col === 'check') return;
+        const handle = document.createElement('span');
+        handle.className = 'ops-col-resizer';
+        handle.setAttribute('aria-hidden', 'true');
+        th.appendChild(handle);
+        handle.addEventListener('mousedown', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const startX = event.clientX;
+            const startWidth = opsColumnWidths[col] || OPS_COLUMN_DEFAULTS[col];
+            document.body.classList.add('ops-resizing');
+            const onMove = moveEvent => {
+                const nextWidth = Math.max(OPS_COLUMN_MIN[col] || 72, startWidth + moveEvent.clientX - startX);
+                opsColumnWidths[col] = Math.round(nextWidth);
+                applyOpsColumnWidths();
+            };
+            const onUp = () => {
+                document.body.classList.remove('ops-resizing');
+                saveOpsColumnWidths();
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    });
+}
+
+function resetOpsColumnWidths() {
+    opsColumnWidths = { ...OPS_COLUMN_DEFAULTS };
+    localStorage.removeItem(OPS_COLUMN_WIDTH_KEY);
+    applyOpsColumnWidths();
+    showToast('已恢复默认列宽', 'success');
+}
+
+function setViewMode(mode, persist = true) {
+    if (!['detail', 'compact', 'large', 'ops'].includes(mode)) mode = 'detail';
     currentViewMode = mode;
+    if (persist) localStorage.setItem(VIDEO_VIEW_MODE_KEY, mode);
     const tc = document.querySelector('.table-card');
     if (tc) tc.classList.toggle('compact-mode', mode === 'compact');
     document.getElementById('pageInput')?.classList.toggle('video-library-large', mode === 'large');
+    document.getElementById('pageInput')?.classList.toggle('video-library-ops', mode === 'ops');
     document.getElementById('viewDetail').classList.toggle('active', mode === 'detail');
     document.getElementById('viewCompact').classList.toggle('active', mode === 'compact');
     document.getElementById('viewLarge').classList.toggle('active', mode === 'large');
+    document.getElementById('viewOps').classList.toggle('active', mode === 'ops');
 }
 
 // ── 行内编辑 ──
@@ -3577,25 +3850,60 @@ function startInlineEdit(td, videoId, field, currentVal, isPercent) {
 
 // ── 快捷筛选 ──
 let activeQuickFilter = null;
+function localDateString(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+function activateDateInput(input) {
+    input.type = 'date';
+    input.showPicker?.();
+}
+function deactivateDateInput(input) {
+    if (!input.value) input.type = 'text';
+}
+function setVideoDateRange(from, to) {
+    const fromEl = document.getElementById('dateFrom');
+    const toEl = document.getElementById('dateTo');
+    if (!fromEl || !toEl) return;
+    fromEl.type = from ? 'date' : 'text';
+    toEl.type = to ? 'date' : 'text';
+    fromEl.value = from || '';
+    toEl.value = to || '';
+}
+function onVideoDateChange() {
+    activeQuickFilter = null;
+    document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
+    currentPage = 1;
+    loadVideos();
+}
 function applyQuickFilter(type) {
     activeQuickFilter = type;
     document.querySelectorAll('.qf-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === type));
+    setVideoDateRange('', '');
+    document.getElementById('filterViolation').value = '';
     const today = new Date();
     let from = '', to = '';
-    if (type === '7d') {
+    if (type === 'today') {
+        from = localDateString(today); to = from;
+    } else if (type === 'yesterday') {
+        const d = new Date(today); d.setDate(d.getDate() - 1);
+        from = localDateString(d); to = from;
+    } else if (type === '7d') {
         const d = new Date(today); d.setDate(d.getDate() - 7);
-        from = d.toISOString().split('T')[0]; to = today.toISOString().split('T')[0];
+        from = localDateString(d); to = localDateString(today);
     } else if (type === '30d') {
         const d = new Date(today); d.setDate(d.getDate() - 30);
-        from = d.toISOString().split('T')[0]; to = today.toISOString().split('T')[0];
+        from = localDateString(d); to = localDateString(today);
     } else if (type === 'violation') {
         document.getElementById('filterViolation').value = 'violation';
     } else if (type === 'high') {
         // 高互动：设置搜索关键词为空，通过后端 sort 降序 + 前端标记
     }
+    refreshCustomSelect('filterViolation');
     if (from) {
-        document.getElementById('dateFrom').value = from;
-        document.getElementById('dateTo').value = to;
+        setVideoDateRange(from, to);
     }
     currentPage = 1;
     loadVideos();
@@ -3603,9 +3911,9 @@ function applyQuickFilter(type) {
 function clearQuickFilter() {
     activeQuickFilter = null;
     document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('dateFrom').value = '';
-    document.getElementById('dateTo').value = '';
+    setVideoDateRange('', '');
     document.getElementById('filterViolation').value = '';
+    refreshCustomSelect('filterViolation');
     currentPage = 1;
     loadVideos();
 }
@@ -3635,6 +3943,7 @@ function captureCurrentFilters() {
         dateTo: document.getElementById('dateTo').value,
         directionId: document.getElementById('filterDirection').value,
         groupId: document.getElementById('filterGroup').value,
+        accountId: document.getElementById('filterAccount')?.value || '',
         violation: document.getElementById('filterViolation').value,
         tagId: currentFilterTag,
     };
@@ -3642,10 +3951,12 @@ function captureCurrentFilters() {
 
 function applyFiltersToUI(filters) {
     document.getElementById('searchInput').value = filters.keyword || '';
-    document.getElementById('dateFrom').value = filters.dateFrom || '';
-    document.getElementById('dateTo').value = filters.dateTo || '';
+    setVideoDateRange(filters.dateFrom || '', filters.dateTo || '');
     document.getElementById('filterDirection').value = filters.directionId || '';
     document.getElementById('filterGroup').value = filters.groupId || '';
+    const accountFilter = document.getElementById('filterAccount');
+    if (accountFilter) accountFilter.value = filters.accountId || '';
+    if (_assInstances['filterAccount']) _assInstances['filterAccount'].setValue(filters.accountId || '', true);
     document.getElementById('filterViolation').value = filters.violation || '';
     currentFilterTag = filters.tagId || null;
     // 更新标签筛选高亮
@@ -3661,7 +3972,7 @@ function applyFiltersToUI(filters) {
 function saveCurrentView() {
     const filters = captureCurrentFilters();
     // 检查是否有实际筛选条件
-    const hasFilter = filters.keyword || filters.dateFrom || filters.dateTo || filters.directionId || filters.groupId || filters.violation || filters.tagId;
+    const hasFilter = filters.keyword || filters.dateFrom || filters.dateTo || filters.directionId || filters.groupId || filters.accountId || filters.violation || filters.tagId;
     if (!hasFilter) { showToast('当前无筛选条件，无需保存'); return; }
 
     const name = prompt('输入视图名称：');
@@ -3721,9 +4032,73 @@ async function loadVideos() {
     const data = await res.json();
     renderVideoTable(data.videos);
     renderVideoCards(data.videos);
+    renderOpsTable(data.videos, data.total);
     renderPagination(data.total, data.page, data.page_size);
     document.getElementById('totalCount').textContent = `共 ${data.total} 条`;
     updateSortArrows();
+}
+
+function pctText(v) {
+    const n = Number(v || 0);
+    return n ? `${n}%` : '--';
+}
+
+function renderOpsTable(videos, total) {
+    const body = document.getElementById('opsVideoBody');
+    const summary = document.getElementById('opsSummaryGrid');
+    if (!body || !summary) return;
+    applyOpsColumnWidths();
+    const totalPlay = videos.reduce((sum, v) => sum + (v.play_count || 0), 0);
+    const avgCompletion = videos.length ? videos.reduce((sum, v) => sum + (v.completion_rate || 0), 0) / videos.length : 0;
+    const avgInteraction = videos.length ? videos.reduce((sum, v) => sum + (v.interaction_rate || 0), 0) / videos.length : 0;
+    const reviewCount = videos.filter(v => v.material_status === '待复盘').length;
+    const violationCount = videos.filter(v => v.violation_type).length;
+    summary.innerHTML = [
+        ['当前结果', `${total || 0}`, '符合筛选的视频'],
+        ['本页播放', fmtNum(totalPlay), '当前页合计'],
+        ['平均完播', pctText(avgCompletion.toFixed(2)), '当前页均值'],
+        ['平均互动', pctText(avgInteraction.toFixed(2)), '当前页均值'],
+        ['待复盘', `${reviewCount}`, '需要处理'],
+        ['违规', `${violationCount}`, '风险内容'],
+    ].map(([label, value, sub]) => `<div class="ops-summary-card"><span>${label}</span><strong>${value}</strong><em>${sub}</em></div>`).join('');
+    if (!videos.length) {
+        body.innerHTML = '<tr><td colspan="15" class="ops-empty">暂无数据，请调整筛选条件</td></tr>';
+        return;
+    }
+    body.innerHTML = videos.map(v => {
+        const checked = checkedIds.has(v.id) ? 'checked' : '';
+        const selected = checkedIds.has(v.id) ? ' selected' : '';
+        const dirName = getDirectionName(v.direction_id) || '-';
+        const accName = v.account_name || '-';
+        const material = v.material_status || '已发布';
+        const tags = (v.tags || []).slice(0, 2).map(t => `<span class="tag-badge">${esc(t.name)}</span>`).join('');
+        const media = v.cover_path
+            ? `<img src="/api/videos/${v.id}/cover" alt="">`
+            : v.video_path ? `<video muted playsinline preload="metadata" src="/api/videos/${v.id}/stream"></video>`
+            : '<div class="ops-thumb-empty">+</div>';
+        const preview = v.video_path
+            ? `/api/videos/${v.id}/stream`
+            : v.cover_path ? `/api/videos/${v.id}/cover` : '';
+        return `<tr class="${selected}">
+            <td class="ops-sticky ops-check"><input type="checkbox" data-vid="${v.id}" ${checked} onchange="toggleCheck(${v.id}, this)"></td>
+            <td class="ops-sticky ops-thumb-cell">
+                <div class="ops-thumb" data-title="${esc(v.title)}" data-preview="${preview}" data-kind="${v.video_path ? 'video' : v.cover_path ? 'image' : ''}" onmouseenter="showOpsPreview(this, event)" onmousemove="moveOpsPreview(event)" onmouseleave="hideOpsPreview()">${media}</div>
+            </td>
+            <td class="ops-sticky ops-title-cell"><div class="ops-title" title="${esc(v.title)}">${esc(v.title)}</div><div class="ops-tags">${tags}</div></td>
+            <td>${v.publish_date || '-'}${v.publish_time ? `<br><span>${v.publish_time}</span>` : ''}</td>
+            <td>${esc(accName)}</td>
+            <td>${esc(dirName)}</td>
+            <td><span class="ops-status">${esc(material)}</span></td>
+            <td class="num">${fmtNum(v.play_count || 0)}</td>
+            <td class="num">${pctText(v.completion_rate)}</td>
+            <td class="num">${pctText(v.interaction_rate)}</td>
+            <td class="num">${fmtNum(v.comment_count || 0)}</td>
+            <td class="num">${fmtNum(v.favorite_count || 0)}</td>
+            <td>${v.violation_type ? `<span class="vio-tag">${esc(v.violation_type)}</span>` : '<span class="ops-muted">-</span>'}</td>
+            <td><span class="ops-review" title="${esc(v.review_summary || v.reusable_point || '')}">${esc(v.review_summary || v.reusable_point || '-')}</span></td>
+            <td class="ops-actions"><button class="btn btn-sm btn-outline" onclick="openDetailDrawer(${v.id})">详情</button><button class="btn btn-sm btn-outline" onclick="openEdit(${v.id})">编辑</button></td>
+        </tr>`;
+    }).join('');
 }
 
 function renderVideoTable(videos) {
@@ -3804,7 +4179,7 @@ function renderVideoCards(videos) {
         const tags = (v.tags || []).map(t => `<span class="tag-badge">${esc(t.name)}</span>`).join('');
         const dirName = getDirectionName(v.direction_id) || '-';
         const media = v.video_path
-            ? `<video controls playsinline preload="metadata" src="/api/videos/${v.id}/stream" poster="${v.cover_path ? `/api/videos/${v.id}/cover` : ''}" onplay="pauseOtherCardVideos(this)"></video>`
+            ? `<video playsinline preload="metadata" src="/api/videos/${v.id}/stream" poster="${v.cover_path ? `/api/videos/${v.id}/cover` : ''}" onplay="pauseOtherCardVideos(this)"></video>`
             : v.cover_path
                 ? `<img src="/api/videos/${v.id}/cover" alt="">`
                 : '<div class="video-card-placeholder">暂无素材</div>';
@@ -3814,36 +4189,63 @@ function renderVideoCards(videos) {
             <label class="video-card-select" onclick="event.stopPropagation()" title="选择视频">
                 <input type="checkbox" data-card-vid="${v.id}" ${checked} onchange="toggleCheck(${v.id}, this)">
             </label>
-            <div class="video-card-media" onclick="${v.video_path ? '' : `openEdit(${v.id})`}">
+            <div class="video-card-media" onmouseenter="setCardVideoControls(this, true)" onmouseleave="setCardVideoControls(this, false)" onclick="${v.video_path ? '' : `openEdit(${v.id})`}">
                 ${media}
-                <div class="video-card-overlay">
-                    <div class="video-card-overlay-title">${esc(v.title)}</div>
-                    <div class="video-card-overlay-meta">
-                        <span>${fmtNum(v.play_count)} 播放</span>
-                        <span>${rate}% 互动</span>
-                        <span>${completionRate}% 完播</span>
-                    </div>
-                </div>
             </div>
             <div class="video-card-body">
                 <div class="video-card-title" onclick="openDetailDrawer(${v.id})" title="${esc(v.title)}">${esc(v.title)}</div>
-                <div class="video-card-stats">
-                    <div class="video-card-stat"><strong>${fmtNum(v.play_count)}</strong><span>播放</span></div>
-                    <div class="video-card-stat"><strong>${rate}%</strong><span>互动</span></div>
-                    <div class="video-card-stat"><strong>${completionRate}%</strong><span>完播</span></div>
-                    <div class="video-card-stat"><strong>${fmtNum(v.favorite_count || 0)}</strong><span>收藏</span></div>
+                <div class="video-card-stats-grid">
+                    <div><span>播放</span><strong>${fmtNum(v.play_count)}</strong></div>
+                    <div><span>完播</span><strong>${completionRate ? `${completionRate}%` : '--'}</strong></div>
+                    <div><span>互动</span><strong>${rate ? `${rate}%` : '--'}</strong></div>
+                    <div><span>收藏</span><strong>${fmtNum(v.favorite_count || 0)}</strong></div>
                 </div>
                 <div class="video-card-meta"><span>${v.publish_date || '-'}</span><span>${esc(dirName)}</span></div>
                 <div class="direction-tags" style="margin:10px 0 0">${tags || '<span style="font-size:12px;color:#bbb">暂无标签</span>'}</div>
                 <div class="video-card-actions">
-                    <button class="btn btn-sm btn-outline" onclick="openDetailDrawer(${v.id})">详情</button>
-                    ${v.video_path ? `<button class="btn btn-sm btn-primary" onclick="toggleCardVideo(this.closest('.video-card').querySelector('.video-card-media'))">播放/暂停</button>` : `<button class="btn btn-sm btn-outline" onclick="triggerUpload(${v.id})">上传</button>`}
+                    <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();openDetailDrawer(${v.id})">详情</button>
+                    ${v.video_path ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();toggleCardVideo(this.closest('.video-card').querySelector('.video-card-media'))">播放/暂停</button>` : `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();triggerUpload(${v.id})">上传</button>`}
                 </div>
             </div>
             <div class="video-card-popover">${renderVideoCardPopover(v)}</div>
         </div>`;
     }).join('');
     markActiveVideoCard(videos[0].id);
+}
+
+function showOpsPreview(el, event) {
+    const box = document.getElementById('opsPreview');
+    if (!box) return;
+    const src = el.dataset.preview || '';
+    const title = el.dataset.title || '';
+    const kind = el.dataset.kind || '';
+    if (!src) return;
+    box.innerHTML = kind === 'video'
+        ? `<video muted autoplay loop playsinline src="${src}"></video><div>${title}</div>`
+        : `<img src="${src}" alt=""><div>${title}</div>`;
+    box.classList.add('show');
+    moveOpsPreview(event);
+}
+
+function moveOpsPreview(event) {
+    const box = document.getElementById('opsPreview');
+    if (!box || !box.classList.contains('show')) return;
+    const width = 240;
+    const height = 420;
+    let x = event.clientX + 18;
+    let y = event.clientY - 20;
+    if (x + width > window.innerWidth - 12) x = event.clientX - width - 18;
+    if (y + height > window.innerHeight - 12) y = window.innerHeight - height - 12;
+    if (y < 12) y = 12;
+    box.style.left = `${x}px`;
+    box.style.top = `${y}px`;
+}
+
+function hideOpsPreview() {
+    const box = document.getElementById('opsPreview');
+    if (!box) return;
+    box.classList.remove('show');
+    box.innerHTML = '';
 }
 
 function markActiveVideoCard(videoId) {
@@ -3870,6 +4272,9 @@ function renderVideoCardPopover(v) {
     const hookName = v.interaction_hook_id ? (allHooks.find(h => h.id === v.interaction_hook_id)?.name || '-') : '-';
     const tags = (v.tags || []).map(t => `<span class="tag-badge">${esc(t.name)}</span>`).join('') || '<span style="color:#98a2b3">暂无标签</span>';
     const violation = v.violation_type || '无';
+    const watchQuality = renderWatchQuality(v);
+    const postWatchTerms = renderPostWatchTerms(v.post_watch_search_terms);
+    const watchTrend = renderWatchTrendSummary(v.watch_trend);
     return `
         <div class="video-detail-panel">
         <div class="video-detail-head">
@@ -3885,6 +4290,9 @@ function renderVideoCardPopover(v) {
             <div class="video-detail-metric"><strong>${v.completion_rate || 0}%</strong><span>完播率</span></div>
             <div class="video-detail-metric"><strong>${fmtNum(v.favorite_count || 0)}</strong><span>收藏数</span></div>
         </div>
+        ${watchQuality ? `<div class="video-detail-section"><div class="video-detail-section-title">观看质量</div>${watchQuality}</div>` : ''}
+        ${watchTrend ? `<div class="video-detail-section"><div class="video-detail-section-title">观看趋势</div>${watchTrend}</div>` : ''}
+        ${postWatchTerms ? `<div class="video-detail-section"><div class="video-detail-section-title">观后搜索词</div>${postWatchTerms}</div>` : ''}
         <div class="video-detail-section">
             <div class="video-detail-row"><span>点赞</span><span>${fmtNum(v.like_count)}</span></div>
             <div class="video-detail-row"><span>评论</span><span>${fmtNum(v.comment_count)}</span></div>
@@ -3929,6 +4337,9 @@ async function openDetailDrawer(id) {
     const media = v.video_path
         ? `<video controls playsinline preload="metadata" src="/api/videos/${v.id}/stream" poster="${v.cover_path ? `/api/videos/${v.id}/cover` : ''}"></video>`
         : v.cover_path ? `<img src="/api/videos/${v.id}/cover" alt="">` : '<div class="video-card-placeholder">暂无素材</div>';
+    const watchQuality = renderWatchQuality(v);
+    const postWatchTerms = renderPostWatchTerms(v.post_watch_search_terms);
+    const watchTrend = renderWatchTrendSummary(v.watch_trend);
     document.getElementById('detailDrawerTitle').textContent = v.title || '视频详情';
     document.getElementById('detailDrawerSubtitle').textContent = `${v.publish_date || '-'} · ${dirName}`;
     document.getElementById('detailDrawerBody').innerHTML = `
@@ -3952,6 +4363,11 @@ async function openDetailDrawer(id) {
                 <div class="detail-kv-item"><strong>${fmtNum(v.favorite_count || 0)}</strong><span>收藏</span></div>
                 <div class="detail-kv-item"><strong>${fmtNum(v.share_count || 0)}</strong><span>分享</span></div>
             </div>
+            ${(watchQuality || watchTrend || postWatchTerms) ? `
+            <div class="detail-section-title">创作者中心数据</div>
+            ${watchQuality}
+            ${watchTrend}
+            ${postWatchTerms}` : ''}
             <div class="detail-section-title">归属</div>
             <div class="detail-kv">
                 <div class="detail-kv-item"><strong>${esc(dirName)}</strong><span>方向</span></div>
@@ -4358,6 +4774,7 @@ async function removeCoverAsset() {
 }
 
 async function openEdit(id) {
+    closeDetailDrawer();
     editingVideoId = id;
     const res = await fetch(`/api/videos/${id}`);
     const v = await res.json();
@@ -4502,6 +4919,14 @@ function exportCSV() {
     const dateTo = document.getElementById('dateTo').value;
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
+    const filterDir = document.getElementById('filterDirection')?.value || '';
+    const filterGrp = document.getElementById('filterGroup')?.value || '';
+    const filterViolation = document.getElementById('filterViolation')?.value || '';
+    const filterAcc = document.getElementById('filterAccount')?.value || '';
+    if (filterDir) params.set('direction_id', filterDir);
+    if (filterGrp) params.set('group_id', filterGrp);
+    if (filterViolation) params.set('violation', filterViolation);
+    if (filterAcc) params.set('account_id', filterAcc);
     window.open(`/api/export/csv?${params}`, '_blank');
 }
 
@@ -4547,7 +4972,8 @@ async function uploadVideo(input) {
         const res = await fetch(`/api/videos/${vid}/upload`, { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) {
-            showToast('视频上传成功，正在生成缩略图', 'success');
+            const transcodeText = data.transcoded ? '，已自动转成兼容MP4' : (data.transcode_status === 'failed' ? '，自动转码失败，可手动转兼容MP4' : '');
+            showToast(`视频上传成功${transcodeText}，正在生成缩略图`, data.transcode_status === 'failed' ? 'warning' : 'success');
             await autoGenerateCover(vid, true);
             if (uploadContext === 'edit') await refreshEditingVideo();
             loadVideos();
@@ -4653,11 +5079,25 @@ function pauseOtherCardVideos(current) {
     });
 }
 
+function setCardVideoControls(mediaEl, enabled) {
+    const video = mediaEl?.querySelector('video');
+    if (!video) return;
+    if (enabled) {
+        video.controls = true;
+    } else {
+        video.controls = false;
+    }
+}
+
 function toggleCardVideo(mediaEl) {
     const video = mediaEl?.querySelector('video');
     if (!video) return;
+    video.controls = true;
     if (video.paused) video.play().catch(() => showToast('当前浏览器无法直接播放该视频格式', 'warning'));
-    else pauseCardVideo(video);
+    else {
+        pauseCardVideo(video);
+        if (!mediaEl.matches(':hover')) video.controls = false;
+    }
 }
 
 async function transcodeVideo(videoId) {
@@ -5012,13 +5452,6 @@ function showToastWithUndo(msg, videoIds) {
 let planFormOpen = false;
 let planFilterMode = 'all';
 let allPlans = [];
-
-function localDateString(d = new Date()) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-}
 
 function isDateInCurrentWeek(dateStr) {
     if (!dateStr) return false;
@@ -6171,10 +6604,8 @@ function setCurrentAccount(id) {
     currentAccountId = id || '';
     localStorage.setItem('currentAccountId', currentAccountId);
     syncAccountSelects();
-    // 同步搜索式下拉组件的值
+    // 当前账号只作为录入/计划默认值，不再强制改写视频库筛选，避免出现两个“全部账号”语义。
     if (_assInstances['currentAccountSelect']) _assInstances['currentAccountSelect'].setValue(currentAccountId, true);
-    if (_assInstances['filterAccount']) _assInstances['filterAccount'].setValue(currentAccountId, true);
-    loadVideos();
     if (document.getElementById('pagePlans').classList.contains('show')) loadPlans();
     if (document.getElementById('pageAccounts').classList.contains('show')) renderAccountCards();
 }
@@ -6262,6 +6693,7 @@ let _csActiveInstance = null;
 
 class CustomSelect {
     constructor(el) {
+        if (el.dataset.searchSelect === 'account') return;
         this.el = el;
         this._open = false;
         this._hoverIdx = -1;
@@ -6457,6 +6889,7 @@ const _csInstances = {};
 // 初始化所有 select 为自定义下拉
 function initAllCustomSelects() {
     document.querySelectorAll('select').forEach(el => {
+        if (el.dataset.searchSelect === 'account') return;
         if (el.style.display === 'none' && el.closest('.account-search-select')) return;
         if (el.closest('.account-search-select')) return;
         const uid = el.id || el.dataset.csUid;

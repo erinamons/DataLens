@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "DataLens Douyin Creator Bridge",
+  "version": "0.1.0",
+  "description": "Read visible Douyin Creator Center work data and send it to local DataLens.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://creator.douyin.com/*",
+    "http://127.0.0.1:8900/*",
+    "http://localhost:8900/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Send to DataLens"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://creator.douyin.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

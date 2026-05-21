@@ -168,6 +168,14 @@ def init_db():
                     "reusable_point TEXT DEFAULT ''",
                     "failure_reason TEXT DEFAULT ''",
                     "next_action TEXT DEFAULT ''",
+                    "avg_watch_seconds REAL DEFAULT 0",
+                    "bounce_2s_rate REAL DEFAULT 0",
+                    "completion_5s_rate REAL DEFAULT 0",
+                    "avg_watch_ratio REAL DEFAULT 0",
+                    "watch_trend TEXT DEFAULT ''",
+                    "post_watch_search_terms TEXT DEFAULT ''",
+                    "creator_item_id TEXT DEFAULT ''",
+                    "creator_page_url TEXT DEFAULT ''",
                     "deleted_at TEXT"):
             try:
                 conn.execute(f"ALTER TABLE videos ADD COLUMN {col}")
@@ -259,7 +267,9 @@ def add_video(title, play_count, like_count, comment_count, share_count,
               account_id=None, favorite_count=0, interaction_hook_id=None,
               comment_reason='', comment_trigger_text='', comment_reuse_advice='',
               test_batch_id=None, material_status='已发布', review_summary='',
-              reusable_point='', failure_reason='', next_action=''):
+              reusable_point='', failure_reason='', next_action='',
+              avg_watch_seconds=0, bounce_2s_rate=0, completion_5s_rate=0,
+              avg_watch_ratio=0, watch_trend='', post_watch_search_terms=''):
     with get_db() as conn:
         cur = conn.execute(
             """INSERT INTO videos
@@ -268,14 +278,16 @@ def add_video(title, play_count, like_count, comment_count, share_count,
                 completion_rate, duration, publish_time,
                 violation_type, violation_note, violation_status,
                 interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
-                material_status, review_summary, reusable_point, failure_reason, next_action)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                material_status, review_summary, reusable_point, failure_reason, next_action,
+                avg_watch_seconds, bounce_2s_rate, completion_5s_rate, avg_watch_ratio, watch_trend, post_watch_search_terms)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, play_count, like_count, comment_count, share_count,
              favorite_count, publish_date, direction_id, group_id, account_id,
              completion_rate, duration, publish_time,
              violation_type, violation_note, violation_status,
              interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
-             material_status, review_summary, reusable_point, failure_reason, next_action),
+             material_status, review_summary, reusable_point, failure_reason, next_action,
+             avg_watch_seconds, bounce_2s_rate, completion_5s_rate, avg_watch_ratio, watch_trend, post_watch_search_terms),
         )
         video_id = cur.lastrowid
         log_audit("video", video_id, "create", f"新增视频：{title}", conn)
@@ -295,7 +307,9 @@ def update_video(video_id, title, play_count, like_count, comment_count,
                  account_id=None, favorite_count=None, interaction_hook_id=None,
                  comment_reason=None, comment_trigger_text=None, comment_reuse_advice=None,
                  test_batch_id=None, material_status=None, review_summary=None,
-                 reusable_point=None, failure_reason=None, next_action=None):
+                 reusable_point=None, failure_reason=None, next_action=None,
+                 avg_watch_seconds=None, bounce_2s_rate=None, completion_5s_rate=None,
+                 avg_watch_ratio=None, watch_trend=None, post_watch_search_terms=None):
     with get_db() as conn:
         conn.execute(
             """UPDATE videos SET
@@ -319,7 +333,13 @@ def update_video(video_id, title, play_count, like_count, comment_count,
                review_summary=COALESCE(?, review_summary),
                reusable_point=COALESCE(?, reusable_point),
                failure_reason=COALESCE(?, failure_reason),
-               next_action=COALESCE(?, next_action)
+               next_action=COALESCE(?, next_action),
+               avg_watch_seconds=COALESCE(?, avg_watch_seconds),
+               bounce_2s_rate=COALESCE(?, bounce_2s_rate),
+               completion_5s_rate=COALESCE(?, completion_5s_rate),
+               avg_watch_ratio=COALESCE(?, avg_watch_ratio),
+               watch_trend=COALESCE(?, watch_trend),
+               post_watch_search_terms=COALESCE(?, post_watch_search_terms)
                WHERE id=?""",
             (title, play_count, like_count, comment_count,
              share_count, favorite_count, publish_date, video_path, cover_path,
@@ -328,6 +348,7 @@ def update_video(video_id, title, play_count, like_count, comment_count,
              violation_type, violation_note, violation_status,
              interaction_hook_id, test_batch_id, comment_reason, comment_trigger_text, comment_reuse_advice,
              material_status, review_summary, reusable_point, failure_reason, next_action,
+             avg_watch_seconds, bounce_2s_rate, completion_5s_rate, avg_watch_ratio, watch_trend, post_watch_search_terms,
              video_id),
         )
         conn.execute("DELETE FROM video_tags WHERE video_id=?", (video_id,))
@@ -349,10 +370,33 @@ def patch_video(video_id, **fields):
         conn.execute(f"UPDATE videos SET {sets} WHERE id=?", vals)
 
 
+def find_video_by_creator_source(item_id='', page_url=''):
+    item_id = (item_id or '').strip()
+    page_url = (page_url or '').strip()
+    conditions = []
+    params = []
+    if item_id:
+        conditions.append("creator_item_id=?")
+        params.append(item_id)
+    if page_url:
+        conditions.append("creator_page_url=?")
+        params.append(page_url)
+    if not conditions:
+        return None
+    with get_db() as conn:
+        row = conn.execute(
+            f"SELECT * FROM videos WHERE deleted_at IS NULL AND ({' OR '.join(conditions)}) ORDER BY id DESC LIMIT 1",
+            params,
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def batch_update_videos(video_ids, **fields):
     allowed = {
         "direction_id", "group_id", "account_id", "interaction_hook_id",
-        "test_batch_id", "violation_status", "completion_rate", "material_status"
+        "test_batch_id", "violation_status", "completion_rate", "material_status",
+        "avg_watch_seconds", "bounce_2s_rate", "completion_5s_rate",
+        "avg_watch_ratio", "watch_trend", "post_watch_search_terms"
     }
     clean = {k: v for k, v in fields.items() if k in allowed}
     if not video_ids or not clean:
@@ -1288,11 +1332,13 @@ def batch_remove_tags(video_ids, tag_ids):
 
 # --- CSV 导入导出 ---
 
-def export_csv(tag_id=None, keyword=None, date_from=None, date_to=None, ids=None):
+def export_csv(tag_id=None, keyword=None, date_from=None, date_to=None, ids=None,
+               direction_id=None, group_id=None, violation=None, account_id=None):
     """导出视频数据为 CSV 字符串"""
     videos = get_videos(tag_id, keyword, date_from, date_to,
                         sort_by="publish_date", order="desc", limit=99999, offset=0,
-                        ids=ids)
+                        direction_id=direction_id, group_id=group_id,
+                        violation=violation, account_id=account_id, ids=ids)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["标题", "播放量", "点赞数", "评论数", "收藏数", "分享数", "发布日期", "发布时间", "完播率", "时长(秒)", "违规类型", "违规备注", "素材方向"])

@@ -216,6 +216,69 @@ def run_checks():
     if decision_data.get("directions"):
         check("决策中心包含推荐原因", "decision_reason" in decision_data["directions"][0])
 
+    _, douyin_data = post_json(
+        "/api/creator/douyin/import-current",
+        {
+            "page_url": "https://creator.douyin.com/creator-micro/work-management/work-detail/7639627140002904165",
+            "item_id": "7639627140002904165",
+            "title": "创作者中心导入测试视频",
+            "publish_date": "2026-05-17",
+            "publish_time": "19:30",
+            "play_count": 8888,
+            "like_count": 666,
+            "comment_count": 88,
+            "favorite_count": 77,
+            "share_count": 22,
+            "completion_rate": 41.5,
+            "avg_watch_seconds": 28,
+            "bounce_2s_rate": 10.76,
+            "completion_5s_rate": 72.88,
+            "avg_watch_ratio": 70.99,
+            "watch_trend": "已识别到观看趋势图",
+            "drop_points": [{"second": 18, "label": "低谷1"}],
+            "post_watch_search_terms": [
+                {"rank": 1, "keyword": "马蜂窝的药用配方", "ratio": 45.4},
+                {"rank": 2, "keyword": "马蜂窝的主治功效是什么", "ratio": 27.3},
+            ],
+        },
+    )
+    imported_id = douyin_data.get("video_id")
+    check("创作者中心扩展导入成功", douyin_data.get("success") and imported_id)
+    _, imported_video, _ = get_json(f"/api/videos/{imported_id}")
+    check("创作者中心导入-播放量正确", imported_video.get("play_count") == 8888)
+    check("创作者中心导入-素材状态待复盘", imported_video.get("material_status") == "待复盘")
+    check("创作者中心导入-发布时间", imported_video.get("publish_date") == "2026-05-17")
+    check("创作者中心导入-发布时间点", imported_video.get("publish_time") == "19:30")
+    check("创作者中心导入-平均播放时长", imported_video.get("avg_watch_seconds") == 28)
+    check("创作者中心导入-观后搜索词", "马蜂窝的药用配方" in imported_video.get("post_watch_search_terms", ""))
+
+    _, douyin_second = post_json(
+        "/api/creator/douyin/import-current",
+        {
+            "page_url": "https://creator.douyin.com/creator-micro/work-management/work-detail/7639627140002904999",
+            "item_id": "7639627140002904999",
+            "title": "创作者中心导入测试视频",
+            "play_count": 1234,
+            "completion_rate": 52.1,
+        },
+    )
+    second_id = douyin_second.get("video_id")
+    check("创作者中心导入-不同作品新建", douyin_second.get("success") and second_id and second_id != imported_id)
+
+    _, douyin_second_update = post_json(
+        "/api/creator/douyin/import-current",
+        {
+            "page_url": "https://creator.douyin.com/creator-micro/work-management/work-detail/7639627140002904999",
+            "item_id": "7639627140002904999",
+            "title": "创作者中心导入测试视频",
+            "play_count": 2345,
+            "completion_rate": 60.5,
+        },
+    )
+    check("创作者中心导入-同作品更新", douyin_second_update.get("mode") == "updated" and douyin_second_update.get("video_id") == second_id)
+    _, second_video, _ = get_json(f"/api/videos/{second_id}")
+    check("创作者中心导入-同作品播放量更新", second_video.get("play_count") == 2345)
+
     # 4. 不存在的视频
     _, d, _ = get_json("/api/videos/99999")
     check("GET不存在视频-返回error", "error" in d)

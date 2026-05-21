@@ -39,6 +39,7 @@ from database import (
     get_hook_recommendations, get_comment_opportunities,
     get_data_quality, get_data_quality_tasks, get_audit_logs, get_test_batches, add_test_batch, get_hook_review,
     update_test_batch, delete_test_batch, get_decision_center, update_video_review,
+    find_video_by_creator_source,
     global_search,
 )
 
@@ -127,6 +128,50 @@ def _capture_cover_frame(ffmpeg, video_path, output_path, second):
     return proc.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0
 
 
+def _transcode_to_browser_mp4(src, output):
+    ffmpeg = _get_ffmpeg_exe()
+    if not ffmpeg:
+        return False, "未找到 ffmpeg，无法转码"
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(src),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        str(output),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if proc.returncode != 0 or not output.exists() or output.stat().st_size == 0:
+            _unlink_file(output)
+            msg = (proc.stderr or proc.stdout or "转码失败").strip().splitlines()
+            return False, msg[-1] if msg else "转码失败"
+        return True, ""
+    except subprocess.TimeoutExpired:
+        _unlink_file(output)
+        return False, "转码超时"
+    except Exception as exc:
+        _unlink_file(output)
+        return False, f"转码失败: {exc}"
+
+
 def _model_updates(model):
     if hasattr(model, "model_dump"):
         return model.model_dump(exclude_unset=True)
@@ -182,6 +227,12 @@ class VideoIn(BaseModel):
     reusable_point: str = ""
     failure_reason: str = ""
     next_action: str = ""
+    avg_watch_seconds: float = 0
+    bounce_2s_rate: float = 0
+    completion_5s_rate: float = 0
+    avg_watch_ratio: float = 0
+    watch_trend: str = ""
+    post_watch_search_terms: str = ""
 
 
 class VideoUpdate(VideoIn):
@@ -326,6 +377,31 @@ class BatchUpdateIn(BaseModel):
     next_action: Optional[str] = None
 
 
+class DouyinCreatorImportIn(BaseModel):
+    source: str = "douyin_creator_extension"
+    page_url: str = ""
+    item_id: str = ""
+    title: str = ""
+    publish_date: str = ""
+    publish_time: str = ""
+    play_count: int = 0
+    like_count: int = 0
+    comment_count: int = 0
+    favorite_count: int = 0
+    share_count: int = 0
+    completion_rate: float = 0
+    raw_text: str = ""
+    captured_at: str = ""
+    avg_watch_seconds: float = 0
+    bounce_2s_rate: float = 0
+    completion_5s_rate: float = 0
+    avg_watch_ratio: float = 0
+    watch_trend: str = ""
+    post_watch_search_terms: list[dict] = []
+    watch_trend_points: list[dict] = []
+    drop_points: list[dict] = []
+
+
 # --- 视频 API ---
 
 @app.get("/api/videos")
@@ -385,6 +461,12 @@ def api_add_video(data: VideoIn):
         reusable_point=data.reusable_point,
         failure_reason=data.failure_reason,
         next_action=data.next_action,
+        avg_watch_seconds=data.avg_watch_seconds,
+        bounce_2s_rate=data.bounce_2s_rate,
+        completion_5s_rate=data.completion_5s_rate,
+        avg_watch_ratio=data.avg_watch_ratio,
+        watch_trend=data.watch_trend,
+        post_watch_search_terms=data.post_watch_search_terms,
     )
     return {"success": True, "id": video_id}
 
@@ -412,6 +494,12 @@ def api_update_video(video_id: int, data: VideoUpdate):
         reusable_point=data.reusable_point,
         failure_reason=data.failure_reason,
         next_action=data.next_action,
+        avg_watch_seconds=data.avg_watch_seconds,
+        bounce_2s_rate=data.bounce_2s_rate,
+        completion_5s_rate=data.completion_5s_rate,
+        avg_watch_ratio=data.avg_watch_ratio,
+        watch_trend=data.watch_trend,
+        post_watch_search_terms=data.post_watch_search_terms,
     )
     return {"success": True}
 
@@ -422,7 +510,9 @@ def api_patch_video(video_id: int, data: dict):
     allowed = {'play_count', 'like_count', 'comment_count', 'favorite_count', 'share_count',
                'completion_rate', 'duration', 'publish_time', 'violation_type', 'violation_note', 'violation_status',
                'account_id', 'material_status', 'review_summary', 'reusable_point', 'failure_reason', 'next_action',
-               'comment_reason', 'comment_trigger_text', 'comment_reuse_advice'}
+               'comment_reason', 'comment_trigger_text', 'comment_reuse_advice',
+               'avg_watch_seconds', 'bounce_2s_rate', 'completion_5s_rate',
+               'avg_watch_ratio', 'watch_trend', 'post_watch_search_terms'}
     fields = {k: v for k, v in data.items() if k in allowed}
     if not fields:
         return {"success": False, "error": "无有效字段"}
@@ -488,6 +578,85 @@ def api_update_video_review(video_id: int, data: VideoReviewIn):
     return {"success": ok}
 
 
+@app.post("/api/creator/douyin/import-current")
+def api_import_douyin_creator_current(data: DouyinCreatorImportIn):
+    """接收浏览器扩展从抖音创作者中心当前页面读取到的可见数据。"""
+    title = (data.title or "").strip() or f"抖音作品 {data.item_id or date.today().isoformat()}"
+    item_id = (data.item_id or "").strip()
+    page_url = (data.page_url or "").strip()
+    publish_date = (data.publish_date or "").strip() or date.today().isoformat()
+    publish_time = (data.publish_time or "").strip()
+    existing = find_video_by_creator_source(item_id=item_id, page_url=page_url)
+
+    note_parts = [
+        "来源：抖音创作者中心扩展",
+        f"作品ID：{data.item_id}" if data.item_id else "",
+        f"页面：{data.page_url}" if data.page_url else "",
+        f"采集时间：{data.captured_at}" if data.captured_at else "",
+    ]
+    review_summary = "\n".join(p for p in note_parts if p)
+    post_watch_search_terms = json.dumps(data.post_watch_search_terms or [], ensure_ascii=False)
+    trend_payload = {
+        "summary": data.watch_trend or "",
+        "points": data.watch_trend_points or [],
+        "drop_points": data.drop_points or [],
+    }
+    watch_trend = json.dumps(trend_payload, ensure_ascii=False)
+
+    if existing:
+        video_id = existing["id"]
+        update_video_review(video_id, review_summary=review_summary)
+        from database import patch_video
+        patch_video(
+            video_id,
+            title=title,
+            play_count=max(0, data.play_count or 0),
+            like_count=max(0, data.like_count or 0),
+            comment_count=max(0, data.comment_count or 0),
+            favorite_count=max(0, data.favorite_count or 0),
+            share_count=max(0, data.share_count or 0),
+            publish_date=publish_date,
+            publish_time=publish_time,
+            completion_rate=max(0, data.completion_rate or 0),
+            material_status="待复盘",
+            avg_watch_seconds=max(0, data.avg_watch_seconds or 0),
+            bounce_2s_rate=max(0, data.bounce_2s_rate or 0),
+            completion_5s_rate=max(0, data.completion_5s_rate or 0),
+            avg_watch_ratio=max(0, data.avg_watch_ratio or 0),
+            watch_trend=watch_trend,
+            post_watch_search_terms=post_watch_search_terms,
+            creator_item_id=item_id,
+            creator_page_url=page_url,
+        )
+        return {"success": True, "mode": "updated", "video_id": video_id}
+
+    video_id = add_video(
+        title=title,
+        play_count=max(0, data.play_count or 0),
+        like_count=max(0, data.like_count or 0),
+        comment_count=max(0, data.comment_count or 0),
+        share_count=max(0, data.share_count or 0),
+        favorite_count=max(0, data.favorite_count or 0),
+        publish_date=publish_date,
+        tag_ids=[],
+        completion_rate=max(0, data.completion_rate or 0),
+        publish_time=publish_time,
+        material_status="待复盘",
+        review_summary=review_summary,
+        comment_reason="从创作者中心导入，待复盘",
+        comment_trigger_text=data.page_url or data.item_id,
+        avg_watch_seconds=max(0, data.avg_watch_seconds or 0),
+        bounce_2s_rate=max(0, data.bounce_2s_rate or 0),
+        completion_5s_rate=max(0, data.completion_5s_rate or 0),
+        avg_watch_ratio=max(0, data.avg_watch_ratio or 0),
+        watch_trend=watch_trend,
+        post_watch_search_terms=post_watch_search_terms,
+    )
+    from database import patch_video
+    patch_video(video_id, creator_item_id=item_id, creator_page_url=page_url)
+    return {"success": True, "mode": "created", "video_id": video_id}
+
+
 # --- 文件上传 ---
 
 @app.post("/api/videos/{video_id}/upload")
@@ -507,8 +676,29 @@ def api_upload_video(video_id: int, file: UploadFile = File(...)):
     save_path = UPLOAD_DIR / filename
     with open(save_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
-    update_video_path(video_id, str(save_path))
-    return {"success": True, "filename": filename}
+    final_path = save_path
+    transcode_status = "skipped"
+    transcode_error = ""
+    ffmpeg = _get_ffmpeg_exe()
+    if ffmpeg:
+        compat_path = UPLOAD_DIR / f"{video_id}_{uuid.uuid4().hex[:8]}_compat.mp4"
+        ok, transcode_error = _transcode_to_browser_mp4(save_path, compat_path)
+        if ok:
+            final_path = compat_path
+            transcode_status = "success"
+            _unlink_file(save_path)
+        else:
+            transcode_status = "failed"
+    else:
+        transcode_status = "missing_ffmpeg"
+    update_video_path(video_id, str(final_path))
+    return {
+        "success": True,
+        "filename": final_path.name,
+        "transcoded": transcode_status == "success",
+        "transcode_status": transcode_status,
+        "transcode_error": transcode_error,
+    }
 
 
 @app.post("/api/videos/{video_id}/cover")
@@ -557,53 +747,16 @@ def api_transcode_video(video_id: int):
     path = get_video_path(video_id)
     if not path or not Path(path).exists():
         return {"success": False, "error": "视频文件不存在"}
-    ffmpeg = _get_ffmpeg_exe()
-    if not ffmpeg:
-        return {"success": False, "error": "未找到 ffmpeg，无法转码"}
 
     src = Path(path)
     output = UPLOAD_DIR / f"{video_id}_{uuid.uuid4().hex[:8]}_compat.mp4"
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-i",
-        str(src),
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a?",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        str(output),
-    ]
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if proc.returncode != 0 or not output.exists() or output.stat().st_size == 0:
-            _unlink_file(output)
-            msg = (proc.stderr or proc.stdout or "转码失败").strip().splitlines()
-            return {"success": False, "error": msg[-1] if msg else "转码失败"}
-        update_video_path(video_id, str(output))
-        if src.resolve() != output.resolve():
-            _unlink_file(src)
-        return {"success": True, "filename": output.name}
-    except subprocess.TimeoutExpired:
-        _unlink_file(output)
-        return {"success": False, "error": "转码超时"}
-    except Exception as exc:
-        _unlink_file(output)
-        return {"success": False, "error": f"转码失败: {exc}"}
+    ok, error = _transcode_to_browser_mp4(src, output)
+    if not ok:
+        return {"success": False, "error": error}
+    update_video_path(video_id, str(output))
+    if src.resolve() != output.resolve():
+        _unlink_file(src)
+    return {"success": True, "filename": output.name}
 
 
 @app.post("/api/videos/{video_id}/cover/auto")
@@ -711,11 +864,19 @@ def api_export_csv(
     keyword: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    direction_id: Optional[int] = None,
+    group_id: Optional[int] = None,
+    violation: Optional[str] = None,
+    account_id: Optional[int] = None,
     ids: Optional[str] = None,
 ):
     """导出 CSV"""
     selected_ids = [v.strip() for v in ids.split(",") if v.strip()] if ids else None
-    csv_text = export_csv(tag_id, keyword, date_from, date_to, selected_ids)
+    csv_text = export_csv(
+        tag_id, keyword, date_from, date_to, selected_ids,
+        direction_id=direction_id, group_id=group_id,
+        violation=violation, account_id=account_id,
+    )
     today = date.today().strftime("%Y%m%d")
     return PlainTextResponse(
         csv_text,

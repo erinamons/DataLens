@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>DataLens</title>
+  <style>
+    body { width: 280px; margin: 0; padding: 14px; font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif; color: #172033; }
+    h1 { font-size: 15px; margin: 0 0 8px; }
+    p { font-size: 12px; line-height: 1.6; color: #667085; margin: 0 0 12px; }
+    button { width: 100%; border: 0; border-radius: 8px; background: #e94560; color: #fff; padding: 10px 12px; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .status { margin-top: 10px; font-size: 12px; line-height: 1.5; color: #667085; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>发送到 DataLens</h1>
+  <p>打开抖音创作者中心作品详情页后点击发送。扩展只读取当前页面可见数据。</p>
+  <button id="sendBtn">读取并发送</button>
+  <div class="status" id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
